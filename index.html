@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Chat Pro | Ultimate</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+</head>
+<body>
+
+    
+    <div id="auth-container" class="auth-wrapper">
+        <div class="auth-card">
+            <h2>🔒 Secure Chat</h2>
+            <input type="email" id="email" placeholder="Email Address">
+            <input type="password" id="password" placeholder="Password">
+            <div class="auth-actions">
+                <button onclick="registerUser()">Register</button>
+                <button onclick="loginUser()" class="btn-login">Login</button>
+            </div>
+        </div>
+    </div>
+
+    
+    <div id="chat-app" class="app-container" style="display:none;">
+        <aside class="sidebar">
+            <header class="my-profile">
+                <div class="profile-main">
+                    <label for="profile-upload">
+                        <img id="display-pic" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" class="avatar">
+                    </label>
+                    <input type="file" id="profile-upload" hidden accept="image/*" onchange="updateProfilePhoto()">
+                    <div id="user-display-name">User</div>
+                </div>
+                
+                <div class="menu-container">
+                    <button class="three-dots" onclick="toggleMenu()">⋮</button>
+                    <div id="options-menu" class="dropdown-content">
+                        <a href="javascript:void(0)" onclick="changeMyUsername()">Change Username</a>
+                        <a href="javascript:void(0)" onclick="location.reload()">Logout</a>
+                    </div>
+                </div>
+            </header>
+            
+            <div class="sidebar-controls">
+                <button onclick="promptAddContact()" class="add-contact-btn">+ Add Contact</button>
+            </div>
+
+            <div id="contact-list" class="contacts-area"></div>
+        </aside>
+
+        <main class="chat-main">
+            <header class="chat-header">
+                <div class="header-info">
+                    <span id="active-user-title">Select a Contact</span>
+                    <small id="last-seen-status"></small>
+                </div>
+            </header>
+            
+            <div id="chat-box" class="chat-content"></div>
+
+            <footer id="chat-footer" class="input-panel" style="display: none;">
+                <label for="image-input" class="attach-btn">📎</label>
+                <input type="file" id="image-input" hidden accept="image/*" onchange="sendImageFile()">
+                <input type="text" id="message-input" placeholder="Type a message..." oninput="updateTypingStatus()">
+                <button onclick="sendMessage()" class="send-btn">Send</button>
+            </footer>
+        </main>
+    </div>
+
+    
+    <div id="image-modal" class="modal" onclick="this.style.display='none'">
+        <img class="modal-content" id="full-image">
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
