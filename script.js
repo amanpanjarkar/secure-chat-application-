@@ -70,7 +70,7 @@ const getTS = () => {
 };
 
 
-async function uploadToCloudinary(file) {
+async function uploadToCloudinary(file, isAuto = false) {
     if (!file) {
         console.warn("Media: No binary data provided.");
         return null;
@@ -79,10 +79,12 @@ async function uploadToCloudinary(file) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("upload_preset", CLOUDINARY_PRESET);
+    
+    const uploadEndpoint = isAuto ? CLOUDINARY_URL.replace("/image/upload", "/video/upload") : CLOUDINARY_URL;
 
     try {
         console.log("Media: Initiating Cloudinary POST stream...");
-        const response = await fetch(CLOUDINARY_URL, { 
+        const response = await fetch(uploadEndpoint, { 
             method: "POST", 
             body: formData 
         });
@@ -198,20 +200,31 @@ function bootSystems() {
 
 
 function initializeSidebar() {
-    const list = document.getElementById('contact-list');
-    list.innerHTML = ""; 
-
-    const usersRef = database.ref('users');
+    const contactsRef = database.ref(`users/${myName}/contacts`);
     
-    usersRef.on('child_added', snap => {
-        if (snap.key !== myName) {
-            renderSidebarRow(snap.key);
+    contactsRef.on('value', snap => {
+        const list = document.getElementById('contact-list');
+        list.innerHTML = ""; 
+        
+        if (!snap.exists()) {
+            console.log("Sidebar: Empty contact list.");
+            return;
         }
+
+        snap.forEach(entry => {
+            if (entry.val() === true) {
+                renderSidebarRow(entry.key);
+            }
+        });
     });
 
-    usersRef.on('child_removed', snap => {
-        const existing = document.getElementById(`row-${snap.key}`);
-        if (existing) existing.remove();
+    database.ref('users').on('child_changed', snap => {
+        const otherUser = snap.val();
+        if (otherUser.contacts && otherUser.contacts[myName] === true) {
+            database.ref(`users/${myName}/contacts/${snap.key}`).transaction((current) => {
+                return (current === null) ? true : current; 
+            });
+        }
     });
 }
 
@@ -352,6 +365,8 @@ function renderMessageBubble(data, key) {
     let bodyHTML = "";
     if (data.type === 'image') {
         bodyHTML = `<img src="${data.text}" class="chat-img-small" loading="lazy" onclick="openFullImage('${data.text}')">`;
+    } else if (data.type === 'audio') {
+        bodyHTML = `<audio controls style="width: 240px; height: 45px; margin-top: 5px;"><source src="${data.text}" type="audio/webm">Your browser does not support the audio element.</audio>`;
     } else {
         bodyHTML = `<div class="text-content">${decodeMsg(data.text)}</div>`;
     }
@@ -626,6 +641,65 @@ window.filterContacts = function() {
         const name = item.querySelector('.contact-name').innerText.toLowerCase();
         item.style.display = name.includes(term) ? 'flex' : 'none';
     });
+};
+
+let mediaRecorder;
+let audioChunks = [];
+let isRecording = false;
+
+window.toggleVoiceRecord = async function() {
+    const voiceBtn = document.getElementById('voice-btn');
+    if (!isRecording) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                audioChunks = [];
+                
+                voiceBtn.style.color = "";
+                voiceBtn.innerText = "🎤";
+                
+                const file = new File([audioBlob], "voice_note.webm", { type: 'audio/webm' });
+                const url = await uploadToCloudinary(file, true);
+                
+                if (url && currentChatRef) {
+                    const payload = {
+                        sender: myName,
+                        text: url,
+                        type: 'audio',
+                        time: getTS(),
+                        status: 'sent'
+                    };
+                    if (currentReplyTo) {
+                        payload.replyTo = currentReplyTo;
+                    }
+                    currentChatRef.push().set(payload);
+                    if (typeof cancelReply === 'function') cancelReply();
+                }
+            };
+            
+            audioChunks = [];
+            mediaRecorder.start();
+            isRecording = true;
+            voiceBtn.style.color = "#f15c6d"; // Red color
+            voiceBtn.innerText = "⏹"; // Stop icon
+        } catch (err) {
+            console.error("Microphone access denied:", err);
+            alert("Microphone access is required to send voice notes.");
+        }
+    } else {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        }
+        isRecording = false;
+    }
 };
 
 window.logoutUser = function() {

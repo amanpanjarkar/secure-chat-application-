@@ -102,7 +102,7 @@
                     <label for="image-input" class="icon-btn attach-btn" style="cursor: pointer;">📎</label>
                     <input type="file" id="image-input" hidden accept="image/*" onchange="sendImageFile()">
                     <input type="text" id="message-input" placeholder="Type a message..." oninput="handleTyping()" onkeydown="if(event.key==='Enter') sendMessage()">
-                    <button class="icon-btn" id="voice-btn">🎤</button>
+                    <button class="icon-btn" id="voice-btn" onclick="toggleVoiceRecord()">🎤</button>
                     <button onclick="sendMessage()" class="icon-btn send-btn" id="send-btn" style="display: none;">➤</button>
                 </footer>
             </div>
