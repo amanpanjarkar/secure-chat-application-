@@ -219,51 +219,31 @@ window.loginUser = function () {
     const email = document.getElementById('email').value.trim();
     const pass = document.getElementById('password').value;
     
-    if (!email || !pass) return showToast("Login: Missing required fields.", "error");
+    if (!email || !pass) return alert("Login: Missing required fields.");
 
     console.log("Auth: Validating session...");
-    auth.signInWithEmailAndPassword(email, pass).then((userCredential) => {
+    auth.signInWithEmailAndPassword(email, pass).then(() => {
     
-        // Query using 'email' field because it is indexed in Firebase rules
         database.ref('users').orderByChild('email').equalTo(email).once('value', snap => {
             if (!snap.exists()) {
-                
-                // Fallback: Mobile auto-capitalized the input, so check the lowercase version
-                database.ref('users').orderByChild('email').equalTo(email.toLowerCase()).once('value', fallbackSnap => {
-                    if (!fallbackSnap.exists()) {
-                        
-                        // Final Fallback: Check the exact email casing stored inside Firebase Auth
-                        const authEmail = userCredential.user.email;
-                        database.ref('users').orderByChild('email').equalTo(authEmail).once('value', finalSnap => {
-                            if (!finalSnap.exists()) {
-                                showToast("System Error: Handle association missing.", "error");
-                                auth.signOut();
-                                return;
-                            }
-                            finalSnap.forEach(child => executeLogin(child.key, authEmail));
-                        });
-                        return;
-                    }
-                    fallbackSnap.forEach(child => executeLogin(child.key, email.toLowerCase()));
-                });
+                alert("System Error: Handle association missing.");
+                auth.signOut();
                 return;
             }
             
-            snap.forEach(child => executeLogin(child.key, email));
+            snap.forEach(child => {
+                myName = child.key; 
+                localStorage.setItem('secureChatUserEmail', email);
+                localStorage.setItem('secureChatUsername', myName);
+                
+                document.getElementById('auth-container').style.display = 'none';
+                document.getElementById('chat-app').style.display = 'flex';
+
+                bootSystems();
+            });
         });
-    }).catch(error => showToast("Auth Failed: " + error.message, "error"));
+    }).catch(error => alert("Auth Failed: " + error.message));
 };
-
-function executeLogin(username, finalEmail) {
-    myName = username; 
-    localStorage.setItem('secureChatUserEmail', finalEmail);
-    localStorage.setItem('secureChatUsername', myName);
-    
-    document.getElementById('auth-container').style.display = 'none';
-    document.getElementById('chat-app').style.display = 'flex';
-
-    bootSystems();
-}
 
 
 function bootSystems() {
