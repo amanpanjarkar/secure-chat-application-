@@ -45,10 +45,12 @@
                         <span id="requests-badge" style="display: none; position: absolute; top: -5px; right: -5px; background: #f15c6d; color: white; font-size: 10px; font-weight: bold; border-radius: 50%; padding: 2px 5px;">0</span>
                     </button>
                     <button class="icon-btn" onclick="promptAddContact()" title="New Chat">＋</button>
-                    <button class="three-dots icon-btn" onclick="toggleMenu()">⋮</button>
-                    <div id="options-menu" class="dropdown-content">
-                        <a href="javascript:void(0)" onclick="changeMyUsername()">Change Username</a>
-                        <a href="javascript:void(0)" onclick="logoutUser()">Logout</a>
+                    <div style="position: relative;">
+                        <button class="three-dots icon-btn" onclick="toggleMenu()">⋮</button>
+                        <div id="options-menu" class="dropdown-content" style="right: 0; left: auto; top: 100%;">
+                            <a href="javascript:void(0)" onclick="changeMyUsername()">Change Username</a>
+                            <a href="javascript:void(0)" onclick="logoutUser()">Logout</a>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -107,7 +109,23 @@
                 </div>
 
                 <footer id="chat-footer" class="input-panel">
-                    <button class="icon-btn">😊</button>
+                    <div style="position: relative;">
+                        <button class="icon-btn" onclick="toggleEmojiMenu()" id="emoji-btn">😊</button>
+                        <div id="emoji-menu" class="dropdown-content" style="bottom: 100%; top: auto; left: 0; padding: 10px; width: 220px; display: none; grid-template-columns: repeat(6, 1fr); gap: 5px; font-size: 20px; background: var(--bg-app); border: 1px solid var(--border-color);">
+                            <span onclick="addEmoji('😀')" style="cursor: pointer; text-align: center;">😀</span>
+                            <span onclick="addEmoji('😂')" style="cursor: pointer; text-align: center;">😂</span>
+                            <span onclick="addEmoji('😍')" style="cursor: pointer; text-align: center;">😍</span>
+                            <span onclick="addEmoji('🙏')" style="cursor: pointer; text-align: center;">🙏</span>
+                            <span onclick="addEmoji('👍')" style="cursor: pointer; text-align: center;">👍</span>
+                            <span onclick="addEmoji('🔥')" style="cursor: pointer; text-align: center;">🔥</span>
+                            <span onclick="addEmoji('😭')" style="cursor: pointer; text-align: center;">😭</span>
+                            <span onclick="addEmoji('🥰')" style="cursor: pointer; text-align: center;">🥰</span>
+                            <span onclick="addEmoji('🤔')" style="cursor: pointer; text-align: center;">🤔</span>
+                            <span onclick="addEmoji('😊')" style="cursor: pointer; text-align: center;">😊</span>
+                            <span onclick="addEmoji('😎')" style="cursor: pointer; text-align: center;">😎</span>
+                            <span onclick="addEmoji('🎉')" style="cursor: pointer; text-align: center;">🎉</span>
+                        </div>
+                    </div>
                     <label for="image-input" class="icon-btn attach-btn" style="cursor: pointer;">📎</label>
                     <input type="file" id="image-input" hidden accept="image/*" onchange="sendImageFile()">
                     <input type="text" id="message-input" placeholder="Type a message..." oninput="handleTyping()" onkeydown="if(event.key==='Enter') sendMessage()">

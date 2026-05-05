@@ -60,6 +60,24 @@ const cleanName = (str) => {
     return str.toLowerCase().trim().replace(/[\.\#\$\[\]\s]/g, "_");
 };
 
+window.playNotificationSound = () => {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.05);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.2);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.2);
+    } catch(e) { console.warn("Audio Context blocked or unsupported"); }
+};
+
 window.showToast = function(msg, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -224,6 +242,9 @@ function bootSystems() {
     initializeSidebar();
 }
 
+let isInitialRequestLoad = true;
+let previousRequestCount = 0;
+
 function listenForRequests() {
     database.ref(`users/${myName}/requests`).on('value', snap => {
         const badge = document.getElementById('requests-badge');
@@ -235,6 +256,8 @@ function listenForRequests() {
         if (!snap.exists()) {
             badge.style.display = 'none';
             list.innerHTML = "<p style='color: var(--text-muted); text-align: center; font-size: 14px;'>No pending requests.</p>";
+            isInitialRequestLoad = false;
+            previousRequestCount = 0;
             return;
         }
 
@@ -253,6 +276,12 @@ function listenForRequests() {
             `;
         });
         
+        if (!isInitialRequestLoad && count > previousRequestCount) {
+            playNotificationSound();
+        }
+        previousRequestCount = count;
+        isInitialRequestLoad = false;
+
         if (count > 0) {
             badge.innerText = count;
             badge.style.display = 'block';
@@ -322,7 +351,10 @@ function renderSidebarRow(cid) {
 
         document.getElementById('contact-list').appendChild(row);
 
+        let isInitialMsgLoad = true;
+        let previousUnread = 0;
         const roomPath = [myName, cid].sort().join("_");
+        database.ref('chats/' + roomPath).off('value'); // Prevent memory leak when re-rendering
         database.ref('chats/' + roomPath).on('value', chatSnap => {
             let unreadCount = 0;
             let lastMsg = null;
@@ -332,6 +364,12 @@ function renderSidebarRow(cid) {
                 lastMsg = msg;
                 if (msg.sender !== myName && msg.status !== 'seen') unreadCount++;
             });
+            
+            if (!isInitialMsgLoad && unreadCount > previousUnread) {
+                playNotificationSound();
+            }
+            previousUnread = unreadCount;
+            isInitialMsgLoad = false;
 
             const unreadBadge = document.getElementById(`unread-${cid}`);
             const statusDiv = document.getElementById(`status-${cid}`);
@@ -664,7 +702,22 @@ window.openFullImage = (url) => {
 
 window.toggleMenu = () => {
     const m = document.getElementById("options-menu");
-    if(m) m.classList.toggle("show");
+    if(m) m.style.display = m.style.display === 'block' ? 'none' : 'block';
+};
+
+window.toggleEmojiMenu = function() {
+    const menu = document.getElementById('emoji-menu');
+    if (menu) menu.style.display = menu.style.display === 'grid' ? 'none' : 'grid';
+};
+
+window.addEmoji = function(emoji) {
+    const input = document.getElementById('message-input');
+    if (input) {
+        input.value += emoji;
+        if(typeof handleTyping === 'function') handleTyping();
+        document.getElementById('emoji-menu').style.display = 'none';
+        input.focus();
+    }
 };
 
 
@@ -684,6 +737,11 @@ window.addEventListener('click', (e) => {
     const chatMenu = document.getElementById('chat-options-menu');
     if (chatMenu && !e.target.matches('.three-dots') && !e.target.closest('#chat-options-menu')) {
         chatMenu.style.display = 'none';
+    }
+
+    const emojiMenu = document.getElementById('emoji-menu');
+    if (emojiMenu && !e.target.closest('#emoji-menu') && e.target.id !== 'emoji-btn') {
+        emojiMenu.style.display = 'none';
     }
 });
 
