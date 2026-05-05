@@ -149,6 +149,21 @@
         </div>
     </div>
 
-    <script src="script.js?v=4"></script>
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="modal" style="display: none; cursor: default; z-index: 10000;">
+        <div class="modal-content" style="background: var(--bg-app); padding: 24px; text-align: center; max-width: 320px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+            <h3 style="margin-top: 0; color: var(--text-main);">Confirm Action</h3>
+            <p id="confirm-message" style="color: var(--text-muted); font-size: 14px; margin-bottom: 24px;">Are you sure?</p>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button onclick="closeConfirmModal()" style="background: var(--bg-hover); color: var(--text-main); padding: 10px 20px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; flex: 1;">Cancel</button>
+                <button id="confirm-btn-yes" style="background: #f15c6d; color: white; padding: 10px 20px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; flex: 1;">Yes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="script.js?v=5"></script>
 </body>
 </html>

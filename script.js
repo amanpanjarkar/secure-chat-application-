@@ -60,6 +60,33 @@ const cleanName = (str) => {
     return str.toLowerCase().trim().replace(/[\.\#\$\[\]\s]/g, "_");
 };
 
+window.showToast = function(msg, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerText = msg;
+    container.appendChild(toast);
+    setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3300);
+};
+
+window.showConfirm = function(msg, callback) {
+    document.getElementById('confirm-message').innerText = msg;
+    document.getElementById('confirm-modal').style.display = 'flex';
+    document.getElementById('confirm-btn-yes').onclick = () => {
+        document.getElementById('confirm-modal').style.display = 'none';
+        callback();
+    };
+};
+window.closeConfirmModal = function() {
+    document.getElementById('confirm-modal').style.display = 'none';
+};
+
+window.alert = function(msg) {
+    if(msg.includes('Error') || msg.includes('Failed')) showToast(msg, 'error');
+    else showToast(msg);
+};
+
 
 const getTS = (ts) => {
     const d = ts ? new Date(ts) : new Date();
@@ -284,32 +311,62 @@ function renderSidebarRow(cid) {
             <div class="sidebar-info-frame" onclick="startChat('${u.username}', '${u.photo || defaultPic}')">
                 <div class="contact-top">
                     <div class="contact-name">${u.username}</div>
-                    <div class="contact-time"></div>
+                    <div class="contact-time" id="time-${cid}"></div>
                 </div>
-                <div class="contact-status" style="color: ${color}">${isTyping ? 'typing...' : displayStatus}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div class="contact-status" id="status-${cid}" style="color: ${color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%;">${isTyping ? 'typing...' : displayStatus}</div>
+                    <div id="unread-${cid}" style="display: none; background: var(--accent); color: white; border-radius: 50%; padding: 2px 6px; font-size: 11px; font-weight: bold;">0</div>
+                </div>
             </div>
         `;
 
-        
-        let timer;
-        const triggerDelete = () => timer = setTimeout(() => {
-            if (confirm(`Clean-Break Delete @${u.username}? (This action is mutual)`)) {
-                
-                database.ref(`users/${myName}/contacts/${cid}`).set(false);
-                
-                database.ref(`users/${cid}/contacts/${myName}`).set(false);
-                
-                
-                if(activeRecipient === cid) resetViewport();
-            }
-        }, 1100);
-
-        row.onmousedown = triggerDelete;
-        row.ontouchstart = triggerDelete;
-        row.onmouseup = () => clearTimeout(timer);
-        row.ontouchend = () => clearTimeout(timer);
-
         document.getElementById('contact-list').appendChild(row);
+
+        const roomPath = [myName, cid].sort().join("_");
+        database.ref('chats/' + roomPath).on('value', chatSnap => {
+            let unreadCount = 0;
+            let lastMsg = null;
+            
+            chatSnap.forEach(msgSnap => {
+                const msg = msgSnap.val();
+                lastMsg = msg;
+                if (msg.sender !== myName && msg.status !== 'seen') unreadCount++;
+            });
+
+            const unreadBadge = document.getElementById(`unread-${cid}`);
+            const statusDiv = document.getElementById(`status-${cid}`);
+            const timeDiv = document.getElementById(`time-${cid}`);
+            const rowEl = document.getElementById(`row-${cid}`);
+
+            if (!unreadBadge || !rowEl) return;
+
+            if (lastMsg) {
+                timeDiv.innerText = lastMsg.time;
+                let preview = "";
+                if (lastMsg.type === 'audio') preview = "🎤 Voice message";
+                else if (lastMsg.type === 'image') preview = "📷 Photo";
+                else preview = decodeMsg(lastMsg.text);
+
+                if (unreadCount > 0 && activeRecipient !== cid) {
+                    unreadBadge.innerText = unreadCount;
+                    unreadBadge.style.display = 'block';
+                    statusDiv.innerText = preview;
+                    statusDiv.style.fontWeight = "bold";
+                    statusDiv.style.color = "var(--text-main)";
+                    
+                    const list = document.getElementById('contact-list');
+                    if (list.firstChild !== rowEl) list.prepend(rowEl);
+                } else {
+                    unreadBadge.style.display = 'none';
+                    statusDiv.innerText = u.typing === myName ? 'typing...' : preview;
+                    statusDiv.style.fontWeight = "normal";
+                    statusDiv.style.color = "var(--text-muted)";
+                    
+                    const list = document.getElementById('contact-list');
+                    if (list.firstChild !== rowEl) list.prepend(rowEl);
+                }
+            }
+        });
     });
 }
 
@@ -790,25 +847,25 @@ window.toggleChatMenu = function() {
 
 window.clearCurrentChat = function() {
     if (!activeRecipient || !currentChatRef) return;
-    if (confirm(`Are you sure you want to completely clear your chat history with @${activeRecipient}? This cannot be undone.`)) {
+    showConfirm(`Are you sure you want to completely clear your chat history with @${activeRecipient}? This cannot be undone.`, () => {
         currentChatRef.remove().then(() => {
             document.getElementById('chat-box').innerHTML = "";
             toggleChatMenu();
-            alert("System: Chat cleared successfully.");
-        }).catch(err => alert("Failed to clear chat: " + err.message));
-    }
+            showToast("System: Chat cleared successfully.");
+        }).catch(err => showToast("Failed to clear chat: " + err.message, 'error'));
+    });
 };
 
 window.unfriendCurrentContact = function() {
     if (!activeRecipient) return;
-    if (confirm(`Are you sure you want to unfriend @${activeRecipient}? You will no longer see them in your contacts list.`)) {
+    showConfirm(`Are you sure you want to unfriend @${activeRecipient}? You will no longer see them in your contacts list.`, () => {
         // Remove from my contacts list
         database.ref(`users/${myName}/contacts/${activeRecipient}`).remove().then(() => {
             resetViewport();
             toggleChatMenu();
-            alert(`System: You have unfriended @${activeRecipient}.`);
+            showToast(`System: You have unfriended @${activeRecipient}.`);
         });
-    }
+    });
 };
 
 window.onload = () => {
