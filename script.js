@@ -433,6 +433,10 @@ function renderSidebarRow(cid) {
 }
 
 const resetViewport = () => {
+    if (currentChatRef) {
+        currentChatRef.off();
+        currentChatRef = null;
+    }
     activeRecipient = "";
     document.getElementById('chat-box').innerHTML = "";
     const activeView = document.getElementById('chat-active-view');
