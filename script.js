@@ -61,8 +61,9 @@ const cleanName = (str) => {
 };
 
 
-const getTS = () => {
-    return new Date().toLocaleTimeString([], { 
+const getTS = (ts) => {
+    const d = ts ? new Date(ts) : new Date();
+    return d.toLocaleTimeString([], { 
         hour: '2-digit', 
         minute: '2-digit', 
         hour12: true 
@@ -179,7 +180,7 @@ window.loginUser = function () {
 function bootSystems() {
     
     database.ref('users/' + myName).update({ status: "Online", typing: "" });
-    database.ref('users/' + myName).onDisconnect().update({ status: "Last seen: " + getTS(), typing: "" });
+    database.ref('users/' + myName).onDisconnect().update({ status: "Offline", lastSeen: firebase.database.ServerValue.TIMESTAMP, typing: "" });
 
     database.ref(`users/${myName}/photo`).on('value', s => {
         const url = s.val() || defaultPic;
@@ -271,6 +272,11 @@ function renderSidebarRow(cid) {
         const isTyping = u.typing === myName;
         const color = isTyping || u.status === 'Online' ? '#25d366' : '#8696a0';
 
+        let displayStatus = u.status || 'Offline';
+        if (u.status === 'Offline' && u.lastSeen) {
+            displayStatus = "Last seen: " + getTS(u.lastSeen);
+        }
+
         row.innerHTML = `
             <div class="sidebar-avatar-frame">
                 <img src="${u.photo || defaultPic}" class="avatar" onclick="event.stopPropagation(); openFullImage('${u.photo || defaultPic}')">
@@ -280,7 +286,7 @@ function renderSidebarRow(cid) {
                     <div class="contact-name">${u.username}</div>
                     <div class="contact-time"></div>
                 </div>
-                <div class="contact-status" style="color: ${color}">${isTyping ? 'typing...' : (u.status || 'Offline')}</div>
+                <div class="contact-status" style="color: ${color}">${isTyping ? 'typing...' : displayStatus}</div>
             </div>
         `;
 
@@ -345,7 +351,11 @@ window.startChat = function (target, photoUrl) {
             sLabel.innerText = "typing...";
             sLabel.style.color = "#25d366";
         } else if (u) {
-            sLabel.innerText = u.status || "";
+            if (u.status === 'Offline' && u.lastSeen) {
+                sLabel.innerText = "Last seen: " + getTS(u.lastSeen);
+            } else {
+                sLabel.innerText = u.status || "";
+            }
             sLabel.style.color = "#8696a0";
         }
     });
