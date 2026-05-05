@@ -178,24 +178,60 @@ window.loginUser = function () {
 
 function bootSystems() {
     
-    const pRef = database.ref('users/' + myName);
-    pRef.update({ status: "Online", typing: "" });
-    pRef.onDisconnect().update({ status: "Last seen: " + getTS(), typing: "" });
+    database.ref('users/' + myName).update({ status: "Online", typing: "" });
+    database.ref('users/' + myName).onDisconnect().update({ status: "Last seen: " + getTS(), typing: "" });
 
-    
     database.ref(`users/${myName}/photo`).on('value', s => {
         const url = s.val() || defaultPic;
         const pImg = document.getElementById('display-pic');
         if (pImg) pImg.src = url;
     });
 
-   
     database.ref(".info/connected").on("value", (snap) => {
         networkStatus = snap.val();
         if (!networkStatus) console.warn("System: Connection Latency detected.");
     });
 
+    listenForRequests();
     initializeSidebar();
+}
+
+function listenForRequests() {
+    database.ref(`users/${myName}/requests`).on('value', snap => {
+        const badge = document.getElementById('requests-badge');
+        const list = document.getElementById('requests-list');
+        if (!badge || !list) return;
+        
+        list.innerHTML = "";
+        
+        if (!snap.exists()) {
+            badge.style.display = 'none';
+            list.innerHTML = "<p style='color: var(--text-muted); text-align: center; font-size: 14px;'>No pending requests.</p>";
+            return;
+        }
+
+        let count = 0;
+        snap.forEach(req => {
+            count++;
+            const sender = req.key;
+            list.innerHTML += `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border-color);">
+                    <span style="font-weight: 500; color: var(--text-main); font-size: 15px;">@${sender}</span>
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="acceptRequest('${sender}')" style="background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 500;">Accept</button>
+                        <button onclick="rejectRequest('${sender}')" style="background: transparent; color: #f15c6d; border: 1px solid #f15c6d; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 500;">Reject</button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        if (count > 0) {
+            badge.innerText = count;
+            badge.style.display = 'block';
+        } else {
+            badge.style.display = 'none';
+        }
+    });
 }
 
 
@@ -216,15 +252,6 @@ function initializeSidebar() {
                 renderSidebarRow(entry.key);
             }
         });
-    });
-
-    database.ref('users').on('child_changed', snap => {
-        const otherUser = snap.val();
-        if (otherUser.contacts && otherUser.contacts[myName] === true) {
-            database.ref(`users/${myName}/contacts/${snap.key}`).transaction((current) => {
-                return (current === null) ? true : current; 
-            });
-        }
     });
 }
 
@@ -548,9 +575,13 @@ window.confirmAddContact = function () {
 
     database.ref('users/' + h).once('value', s => {
         if (s.exists()) {
-            // Add mutual relationship
+            // Add ONLY to my contacts list
             database.ref(`users/${myName}/contacts/${h}`).set(true);
-            database.ref(`users/${h}/contacts/${myName}`).set(true);
+            
+            // Send request to the other user
+            database.ref(`users/${h}/requests/${myName}`).set({
+                timestamp: getTS()
+            });
             
             closeAddContactModal();
             
@@ -587,10 +618,15 @@ window.addEventListener('click', (e) => {
 });
 
 window.initiateReply = function(key, data) {
+    let previewText = "";
+    if (data.type === 'image') previewText = '📷 Photo';
+    else if (data.type === 'audio') previewText = '🎤 Voice message';
+    else previewText = decodeMsg(data.text);
+
     currentReplyTo = {
         key: key,
         sender: data.sender,
-        text: data.type === 'image' ? '📷 Photo' : decodeMsg(data.text)
+        text: previewText
     };
     document.getElementById('reply-preview-sender').innerText = data.sender === myName ? 'You' : data.sender;
     document.getElementById('reply-preview-text').innerText = currentReplyTo.text;
@@ -711,6 +747,27 @@ window.logoutUser = function() {
         localStorage.clear();
         location.reload();
     });
+};
+
+window.openRequestsModal = function() {
+    const modal = document.getElementById('requests-modal');
+    if (modal) modal.style.display = "flex";
+};
+
+window.closeRequestsModal = function() {
+    const modal = document.getElementById('requests-modal');
+    if (modal) modal.style.display = "none";
+};
+
+window.acceptRequest = function(sender) {
+    database.ref(`users/${myName}/contacts/${sender}`).set(true);
+    database.ref(`users/${sender}/contacts/${myName}`).set(true);
+    database.ref(`users/${myName}/requests/${sender}`).remove();
+    alert(`System: Chat request from @${sender} accepted.`);
+};
+
+window.rejectRequest = function(sender) {
+    database.ref(`users/${myName}/requests/${sender}`).remove();
 };
 
 window.onload = () => {
