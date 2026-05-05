@@ -28,6 +28,7 @@ const database = firebase.database();
 let activeRecipient = "";
 let myName = ""; 
 let currentChatRef = null;
+let currentReplyTo = null;
 let typingTimeout = null;
 let networkStatus = true;
 const defaultPic = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
@@ -99,16 +100,16 @@ async function uploadToCloudinary(file) {
 }
 
 
-window.registerUser = function() {
-    const email = document.getElementById('email').value.trim();
-    const pass = document.getElementById('password').value;
+window.registerUserFromPage = function() {
+    const handle = document.getElementById('reg-username').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const pass = document.getElementById('reg-password').value;
     
+    if (!handle) return alert("Register: Please choose a username.");
     if (!email || pass.length < 6) {
         return alert("Register: Requires valid email and 6+ character password.");
     }
     
-    const handle = prompt("Assign your unique @username handle:");
-    if (!handle) return;
     const username = cleanName(handle);
 
     database.ref('users/' + username).once('value').then(snapshot => {
@@ -133,8 +134,8 @@ window.registerUser = function() {
             }
         });
     }).then(() => {
-        alert(`Account Verified! Welcome @${username}`);
-        window.loginUser(); 
+        alert(`Account Verified! Welcome @${username}. Please log in now.`);
+        window.location.href = "index.html"; 
     }).catch(error => {
         console.error("Auth Exception:", error.message);
         alert("Registration Failed: " + error.message);
@@ -160,11 +161,11 @@ window.loginUser = function () {
             
             snap.forEach(child => {
                 myName = child.key; 
-                
+                localStorage.setItem('secureChatUserEmail', email);
+                localStorage.setItem('secureChatUsername', myName);
                 
                 document.getElementById('auth-container').style.display = 'none';
                 document.getElementById('chat-app').style.display = 'flex';
-                document.getElementById('user-display-name').innerText = "@" + myName;
 
                 bootSystems();
             });
@@ -197,34 +198,20 @@ function bootSystems() {
 
 
 function initializeSidebar() {
-    const contactsRef = database.ref(`users/${myName}/contacts`);
-    
-    contactsRef.on('value', snap => {
-        const list = document.getElementById('contact-list');
-        list.innerHTML = ""; 
-        
-        if (!snap.exists()) {
-            console.log("Sidebar: Empty contact list.");
-            return;
-        }
+    const list = document.getElementById('contact-list');
+    list.innerHTML = ""; 
 
-        snap.forEach(entry => {
-            
-            if (entry.val() === true) {
-                renderSidebarRow(entry.key);
-            }
-        });
+    const usersRef = database.ref('users');
+    
+    usersRef.on('child_added', snap => {
+        if (snap.key !== myName) {
+            renderSidebarRow(snap.key);
+        }
     });
 
-   
-    database.ref('users').on('child_changed', snap => {
-        const otherUser = snap.val();
-        if (otherUser.contacts && otherUser.contacts[myName] === true) {
-            database.ref(`users/${myName}/contacts/${snap.key}`).transaction((current) => {
-               
-                return (current === null) ? true : current; 
-            });
-        }
+    usersRef.on('child_removed', snap => {
+        const existing = document.getElementById(`row-${snap.key}`);
+        if (existing) existing.remove();
     });
 }
 
@@ -248,9 +235,12 @@ function renderSidebarRow(cid) {
             <div class="sidebar-avatar-frame">
                 <img src="${u.photo || defaultPic}" class="avatar" onclick="event.stopPropagation(); openFullImage('${u.photo || defaultPic}')">
             </div>
-            <div class="sidebar-info-frame" style="flex:1" onclick="startChat('${u.username}')">
-                <div style="font-weight:600; color:#111;">${u.username}</div>
-                <small style="color: ${color}">${isTyping ? 'typing...' : (u.status || 'Offline')}</small>
+            <div class="sidebar-info-frame" onclick="startChat('${u.username}', '${u.photo || defaultPic}')">
+                <div class="contact-top">
+                    <div class="contact-name">${u.username}</div>
+                    <div class="contact-time"></div>
+                </div>
+                <div class="contact-status" style="color: ${color}">${isTyping ? 'typing...' : (u.status || 'Offline')}</div>
             </div>
         `;
 
@@ -280,19 +270,26 @@ function renderSidebarRow(cid) {
 const resetViewport = () => {
     activeRecipient = "";
     document.getElementById('chat-box').innerHTML = "";
-    document.getElementById('chat-footer').style.display = 'none';
+    const activeView = document.getElementById('chat-active-view');
+    const placeholder = document.getElementById('chat-placeholder');
+    if (activeView) activeView.style.display = 'none';
+    if (placeholder) placeholder.style.display = 'flex';
     document.getElementById('active-user-title').innerText = "Messenger";
     document.getElementById('last-seen-status').innerText = "Select a contact to begin";
+    document.getElementById('chat-app').classList.remove('mobile-chat-active');
 };
 
 
-window.startChat = function (target) {
+window.startChat = function (target, photoUrl) {
     if (!target) return;
     activeRecipient = target;
     
+    document.getElementById('chat-app').classList.add('mobile-chat-active');
+    document.getElementById('chat-placeholder').style.display = 'none';
+    document.getElementById('chat-active-view').style.display = 'flex';
     
-    document.getElementById('chat-footer').style.display = 'flex';
-    document.getElementById('active-user-title').innerText = "@" + target;
+    document.getElementById('active-user-title').innerText = target;
+    if (photoUrl) document.getElementById('active-user-pic').src = photoUrl;
     document.getElementById('chat-box').innerHTML = "";
 
     const roomPath = [myName, activeRecipient].sort().join("_");
@@ -359,8 +356,19 @@ function renderMessageBubble(data, key) {
         bodyHTML = `<div class="text-content">${decodeMsg(data.text)}</div>`;
     }
 
+    let quotedHTML = "";
+    if (data.replyTo) {
+        quotedHTML = `
+            <div class="quoted-message" onclick="scrollToMessage('${data.replyTo.key}')">
+                <span class="quoted-sender">${data.replyTo.sender === myName ? 'You' : data.replyTo.sender}</span>
+                <span class="quoted-text">${data.replyTo.text}</span>
+            </div>
+        `;
+    }
+
     msgDiv.innerHTML = `
         <div class="bubble-inner">
+            ${quotedHTML}
             <div class="content-frame">${bodyHTML}</div>
             <div class="meta-frame">
                 <span class="meta-time">${data.time}</span>
@@ -370,14 +378,14 @@ function renderMessageBubble(data, key) {
     `;
 
    
-    setupBubbleMenu(msgDiv, key, isMe);
+    setupBubbleMenu(msgDiv, key, isMe, data);
 
     box.appendChild(msgDiv);
     box.scrollTop = box.scrollHeight;
 }
 
 
-function setupBubbleMenu(element, key, isMe) {
+function setupBubbleMenu(element, key, isMe, data) {
     let t;
     const trigger = (e) => {
         const posX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
@@ -388,6 +396,12 @@ function setupBubbleMenu(element, key, isMe) {
             menu.className = 'delete-menu';
             menu.style.left = posX + "px"; 
             menu.style.top = posY + "px";
+            
+            const btnReply = document.createElement('div');
+            btnReply.className = "delete-opt";
+            btnReply.innerText = "Reply";
+            btnReply.onclick = () => { initiateReply(key, data); menu.remove(); };
+            menu.appendChild(btnReply);
             
             const btn1 = document.createElement('div');
             btn1.className = "delete-opt";
@@ -421,15 +435,22 @@ window.sendMessage = function () {
     const val = inp.value.trim();
     if (!val || !currentChatRef) return;
 
-    currentChatRef.push().set({
+    const payload = {
         sender: myName,
         text: encodeMsg(val),
         type: 'text',
         time: getTS(),
         status: 'sent'
-    });
+    };
+    if (currentReplyTo) {
+        payload.replyTo = currentReplyTo;
+    }
+    
+    currentChatRef.push().set(payload);
     
     inp.value = "";
+    if (typeof cancelReply === 'function') cancelReply();
+    if (typeof handleTyping === 'function') handleTyping();
     database.ref('users/' + myName).update({ typing: "" });
 };
 
@@ -476,20 +497,54 @@ window.updateTypingStatus = function () {
 
 
 window.promptAddContact = function () {
-    const raw = prompt("Add Connection (@username):");
-    if (!raw) return;
+    const inputField = document.getElementById('new-contact-username');
+    if (inputField) inputField.value = "";
+    const errorEl = document.getElementById('add-contact-error');
+    if (errorEl) errorEl.style.display = "none";
+    document.getElementById('add-contact-modal').style.display = "flex";
+    setTimeout(() => {
+        if (inputField) inputField.focus();
+    }, 100);
+};
+
+window.closeAddContactModal = function () {
+    document.getElementById('add-contact-modal').style.display = "none";
+};
+
+window.confirmAddContact = function () {
+    const raw = document.getElementById('new-contact-username').value.trim();
+    const errorEl = document.getElementById('add-contact-error');
+    
+    if (!raw) {
+        errorEl.innerText = "Please enter a username.";
+        errorEl.style.display = "block";
+        return;
+    }
+    
     const h = cleanName(raw);
 
-    if (h === myName) return alert("System: Identity collision. Cannot add self.");
+    if (h === myName) {
+        errorEl.innerText = "You cannot message yourself.";
+        errorEl.style.display = "block";
+        return;
+    }
+
+    errorEl.style.display = "none";
 
     database.ref('users/' + h).once('value', s => {
         if (s.exists()) {
-            
+            // Add mutual relationship
             database.ref(`users/${myName}/contacts/${h}`).set(true);
             database.ref(`users/${h}/contacts/${myName}`).set(true);
-            alert(`System: Relationship established with @${h}`);
+            
+            closeAddContactModal();
+            
+            // Instantly open the chat with this new contact so they can message them immediately!
+            const u = s.val();
+            startChat(h, u.photo || defaultPic);
         } else {
-            alert(`System: @${h} not found in the decentralized directory.`);
+            errorEl.innerText = "User not found. Check the username.";
+            errorEl.style.display = "block";
         }
     });
 };
@@ -515,4 +570,88 @@ window.addEventListener('click', (e) => {
     const modal = document.getElementById("image-modal");
     if (e.target === modal) modal.style.display = "none";
 });
+
+window.initiateReply = function(key, data) {
+    currentReplyTo = {
+        key: key,
+        sender: data.sender,
+        text: data.type === 'image' ? '📷 Photo' : decodeMsg(data.text)
+    };
+    document.getElementById('reply-preview-sender').innerText = data.sender === myName ? 'You' : data.sender;
+    document.getElementById('reply-preview-text').innerText = currentReplyTo.text;
+    document.getElementById('reply-preview-container').style.display = 'block';
+    document.getElementById('message-input').focus();
+};
+
+window.cancelReply = function() {
+    currentReplyTo = null;
+    const container = document.getElementById('reply-preview-container');
+    if (container) container.style.display = 'none';
+};
+
+window.scrollToMessage = function(key) {
+    const el = document.getElementById(`msg-${key}`);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('highlight-pulse');
+        setTimeout(() => el.classList.remove('highlight-pulse'), 1500);
+    }
+};
+
+window.toggleDarkMode = function() {
+    const isDark = document.body.getAttribute('data-theme') === 'dark';
+    document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+};
+
+window.handleTyping = function() {
+    updateTypingStatus();
+    const val = document.getElementById('message-input').value.trim();
+    const sendBtn = document.getElementById('send-btn');
+    const voiceBtn = document.getElementById('voice-btn');
+    if(sendBtn && voiceBtn) {
+        if(val) {
+            sendBtn.style.display = 'block';
+            voiceBtn.style.display = 'none';
+        } else {
+            sendBtn.style.display = 'none';
+            voiceBtn.style.display = 'block';
+        }
+    }
+};
+
+window.filterContacts = function() {
+    const term = document.getElementById('contact-search').value.toLowerCase();
+    const items = document.querySelectorAll('.contact-item');
+    items.forEach(item => {
+        const name = item.querySelector('.contact-name').innerText.toLowerCase();
+        item.style.display = name.includes(term) ? 'flex' : 'none';
+    });
+};
+
+window.logoutUser = function() {
+    auth.signOut().then(() => {
+        localStorage.removeItem('secureChatUsername');
+        localStorage.removeItem('secureChatUserEmail');
+        location.reload();
+    }).catch(() => {
+        localStorage.clear();
+        location.reload();
+    });
+};
+
+window.onload = () => {
+    const savedName = localStorage.getItem('secureChatUsername');
+    const savedEmail = localStorage.getItem('secureChatUserEmail');
+    
+    if (savedName && savedEmail) {
+        myName = savedName;
+        const authContainer = document.getElementById('auth-container');
+        if (authContainer) authContainer.style.display = 'none';
+        
+        const chatApp = document.getElementById('chat-app');
+        if (chatApp) chatApp.style.display = 'flex';
+        
+        bootSystems();
+    }
+};
 

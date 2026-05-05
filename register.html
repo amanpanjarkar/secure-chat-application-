@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register | Secure Chat Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+</head>
+<body>
+    <div class="auth-wrapper">
+        <div class="auth-card">
+            <h2>🔒 Register</h2>
+            <input type="text" id="reg-username" placeholder="Choose a Username">
+            <input type="email" id="reg-email" placeholder="Email Address">
+            <input type="password" id="reg-password" placeholder="Password (6+ chars)">
+            <div class="auth-actions">
+                <button onclick="registerUserFromPage()" style="width: 100%;">Create Account</button>
+            </div>
+            <div style="text-align: center; margin-top: 15px;">
+                <a href="index.html" style="color: #4CAF50; text-decoration: none; font-size: 0.9em; font-weight: bold;">Already have an account? Login</a>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
