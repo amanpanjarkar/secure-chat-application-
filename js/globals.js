@@ -6,4 +6,5 @@ let typingTimeout = null;
 let networkStatus = true;
 let lastRenderedDate = null;
 let chatClearedAtTimestamp = 0;
+let isSensitiveChatEnabled = false;
 const defaultPic = "https://cdn-icons-png.flaticon.com/512/149/149071.png";

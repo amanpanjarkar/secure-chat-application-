@@ -99,6 +99,14 @@ function renderMessageBubble(data, key) {
     const box = document.getElementById('chat-box');
     const msgDiv = document.createElement('div');
 
+    if (data.type === 'system') {
+        msgDiv.className = 'system-message';
+        msgDiv.innerHTML = `<div class="system-message-inner">${decodeMsg(data.text)}</div>`;
+        box.appendChild(msgDiv);
+        box.scrollTop = box.scrollHeight;
+        return;
+    }
+
     msgDiv.className = `message ${isMe ? 'me' : ''}`;
     msgDiv.id = `msg-${key}`;
 

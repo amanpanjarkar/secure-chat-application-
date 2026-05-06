@@ -296,6 +296,59 @@ window.unfriendCurrentContact = function () {
     });
 };
 
+window.toggleSensitiveChat = function() {
+    isSensitiveChatEnabled = !isSensitiveChatEnabled;
+    const btn = document.getElementById('sensitive-chat-toggle');
+    if (btn) {
+        btn.innerText = isSensitiveChatEnabled ? 'Disable Sensitive Chat' : 'Enable Sensitive Chat';
+    }
+    
+    if (isSensitiveChatEnabled) {
+        showToast("Sensitive Chat enabled. Screenshots will be reported.", "info");
+    } else {
+        document.body.classList.remove('blur-overlay');
+        showToast("Sensitive Chat disabled.", "info");
+    }
+};
+
+window.addEventListener('blur', () => {
+    if (isSensitiveChatEnabled && activeRecipient) {
+        document.body.classList.add('blur-overlay');
+    }
+});
+
+window.addEventListener('focus', () => {
+    document.body.classList.remove('blur-overlay');
+});
+
+// Screenshot detection
+window.addEventListener('keyup', (e) => {
+    if (e.key === 'PrintScreen') {
+        reportScreenshot();
+    }
+});
+
+window.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && ['3', '4', '5', 's', 'S'].includes(e.key)) {
+        reportScreenshot();
+    }
+});
+
+function reportScreenshot() {
+    if (!activeRecipient || !currentChatRef || !isSensitiveChatEnabled) return;
+    
+    showToast("⚠️ Screenshot detected! The other user has been notified.", "error");
+
+    const payload = {
+        sender: 'System',
+        text: encodeMsg(`📸 @${myName} took a screenshot.`),
+        type: 'system',
+        time: getTS(),
+        status: 'sent'
+    };
+    currentChatRef.push().set(payload);
+}
+
 window.onload = () => {
     const savedName = localStorage.getItem('secureChatUsername');
     const savedEmail = localStorage.getItem('secureChatUserEmail');

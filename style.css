@@ -799,3 +799,26 @@ textarea {
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
+
+.blur-overlay {
+    filter: blur(15px);
+    pointer-events: none;
+    user-select: none;
+    opacity: 0.8;
+}
+
+.system-message {
+    text-align: center;
+    margin: 10px 0;
+    display: flex;
+    justify-content: center;
+}
+
+.system-message-inner {
+    background: var(--bg-hover);
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
