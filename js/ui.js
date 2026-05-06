@@ -190,10 +190,12 @@ window.toggleVoiceRecord = async function () {
                 voiceBtn.style.color = "";
                 voiceBtn.innerText = "🎤";
 
-                const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
-                if (!snap.exists() || snap.val() !== true) {
-                    showToast("You cannot send audio. You are no longer friends.", "error");
-                    return;
+                if (activeRecipient !== myName) {
+                    const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
+                    if (!snap.exists() || snap.val() !== true) {
+                        showToast("You cannot send audio. You are no longer friends.", "error");
+                        return;
+                    }
                 }
 
                 const file = new File([audioBlob], "voice_note.webm", { type: 'audio/webm' });

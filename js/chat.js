@@ -14,7 +14,7 @@ const resetViewport = () => {
     document.getElementById('chat-app').classList.remove('mobile-chat-active');
 };
 
-window.startChat = function (target, photoUrl) {
+window.startChat = function (target, photoUrl, isSelfChat = false) {
     if (!target) return;
     activeRecipient = target;
     lastRenderedDate = null;
@@ -23,7 +23,7 @@ window.startChat = function (target, photoUrl) {
     document.getElementById('chat-placeholder').style.display = 'none';
     document.getElementById('chat-active-view').style.display = 'flex';
 
-    document.getElementById('active-user-title').innerText = target;
+    document.getElementById('active-user-title').innerText = isSelfChat ? `${target} (You)` : target;
     if (photoUrl) document.getElementById('active-user-pic').src = photoUrl;
     document.getElementById('chat-box').innerHTML = "";
 
@@ -40,7 +40,10 @@ window.startChat = function (target, photoUrl) {
     database.ref('users/' + target).on('value', snap => {
         const u = snap.val();
         const sLabel = document.getElementById('last-seen-status');
-        if (u && u.typing === myName) {
+        if (isSelfChat) {
+            sLabel.innerText = "Message yourself";
+            sLabel.style.color = "#8696a0";
+        } else if (u && u.typing === myName) {
             sLabel.innerText = "typing...";
             sLabel.style.color = "#25d366";
         } else if (u) {
@@ -209,10 +212,12 @@ window.sendMessage = async function () {
     const val = inp.value.trim();
     if (!val || !currentChatRef) return;
 
-    const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
-    if (!snap.exists() || snap.val() !== true) {
-        showToast("You cannot send a message. You are no longer friends.", "error");
-        return;
+    if (activeRecipient !== myName) {
+        const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
+        if (!snap.exists() || snap.val() !== true) {
+            showToast("You cannot send a message. You are no longer friends.", "error");
+            return;
+        }
     }
 
     const payload = {
@@ -240,11 +245,13 @@ window.sendFile = async function (fileParam = null) {
     const file = fileParam || (fInput ? fInput.files[0] : null);
     if (!file || !currentChatRef) return;
 
-    const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
-    if (!snap.exists() || snap.val() !== true) {
-        showToast("You cannot send files. You are no longer friends.", "error");
-        if (fInput) fInput.value = "";
-        return;
+    if (activeRecipient !== myName) {
+        const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
+        if (!snap.exists() || snap.val() !== true) {
+            showToast("You cannot send files. You are no longer friends.", "error");
+            if (fInput) fInput.value = "";
+            return;
+        }
     }
 
     let type = 'file';
@@ -299,7 +306,7 @@ window.updateProfilePhoto = async function () {
 };
 
 window.updateTypingStatus = function () {
-    if (!activeRecipient) return;
+    if (!activeRecipient || activeRecipient === myName) return;
     database.ref('users/' + myName).update({ typing: activeRecipient });
 
     clearTimeout(typingTimeout);

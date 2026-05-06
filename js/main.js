@@ -70,11 +70,17 @@ function listenForRequests() {
 }
 
 function initializeSidebar() {
+    const list = document.getElementById('contact-list');
+    list.innerHTML = "";
+    renderSidebarRow(myName, true);
+
     const contactsRef = database.ref(`users/${myName}/contacts`);
 
     contactsRef.on('value', snap => {
-        const list = document.getElementById('contact-list');
-        list.innerHTML = "";
+        const existingItems = document.querySelectorAll('.contact-item');
+        existingItems.forEach(item => {
+            if (item.id !== `row-${myName}`) item.remove();
+        });
 
         if (!snap.exists()) {
             console.log("Sidebar: Empty contact list.");
@@ -82,17 +88,17 @@ function initializeSidebar() {
         }
 
         snap.forEach(entry => {
-            if (entry.val() === true) {
-                renderSidebarRow(entry.key);
+            if (entry.val() === true && entry.key !== myName) {
+                renderSidebarRow(entry.key, false);
             }
         });
     });
 }
 
-function renderSidebarRow(cid) {
+function renderSidebarRow(cid, isSelfChat = false) {
     database.ref('users/' + cid).on('value', uSnap => {
         const u = uSnap.val();
-        if (!u) return;
+        if (!u && !isSelfChat) return;
 
         const existing = document.getElementById(`row-${cid}`);
         if (existing) existing.remove();
@@ -101,21 +107,26 @@ function renderSidebarRow(cid) {
         row.className = 'contact-item';
         row.id = `row-${cid}`;
 
-        const isTyping = u.typing === myName;
-        const color = isTyping || u.status === 'Online' ? '#25d366' : '#8696a0';
+        const isTyping = u && u.typing === myName && !isSelfChat;
+        const color = isTyping || (u && u.status === 'Online') ? '#25d366' : '#8696a0';
 
-        let displayStatus = u.status || 'Offline';
-        if (u.status === 'Offline' && u.lastSeen) {
+        let displayStatus = u ? (u.status || 'Offline') : 'Offline';
+        if (isSelfChat) {
+            displayStatus = "Message yourself";
+        } else if (u && u.status === 'Offline' && u.lastSeen) {
             displayStatus = "Last seen: " + getTS(u.lastSeen);
         }
 
+        const avatarSrc = u && u.photo ? u.photo : defaultPic;
+        const dispName = isSelfChat ? `${u ? u.username : cid} (You)` : (u ? u.username : cid);
+
         row.innerHTML = `
             <div class="sidebar-avatar-frame">
-                <img src="${u.photo || defaultPic}" class="avatar" onclick="event.stopPropagation(); openFullImage('${u.photo || defaultPic}')">
+                <img src="${avatarSrc}" class="avatar" onclick="event.stopPropagation(); openFullImage('${avatarSrc}')">
             </div>
-            <div class="sidebar-info-frame" onclick="startChat('${u.username}', '${u.photo || defaultPic}')">
+            <div class="sidebar-info-frame" onclick="startChat('${cid}', '${avatarSrc}', ${isSelfChat})">
                 <div class="contact-top">
-                    <div class="contact-name">${u.username}</div>
+                    <div class="contact-name">${dispName}</div>
                     <div class="contact-time" id="time-${cid}"></div>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -125,7 +136,12 @@ function renderSidebarRow(cid) {
             </div>
         `;
 
-        document.getElementById('contact-list').appendChild(row);
+        const list = document.getElementById('contact-list');
+        if (isSelfChat) {
+            list.prepend(row);
+        } else {
+            list.appendChild(row);
+        }
 
         let isInitialMsgLoad = true;
         let previousUnread = 0;
@@ -166,6 +182,8 @@ function renderSidebarRow(cid) {
                     let preview = "";
                     if (lastMsg.type === 'audio') preview = "🎤 Voice message";
                     else if (lastMsg.type === 'image') preview = "📷 Photo";
+                    else if (lastMsg.type === 'video') preview = "📹 Video";
+                    else if (lastMsg.type === 'file') preview = "📄 Document";
                     else preview = decodeMsg(lastMsg.text);
 
                     if (unreadCount > 0 && activeRecipient !== cid) {
@@ -175,16 +193,18 @@ function renderSidebarRow(cid) {
                         statusDiv.style.fontWeight = "bold";
                         statusDiv.style.color = "var(--text-main)";
 
-                        const list = document.getElementById('contact-list');
-                        if (list.firstChild !== rowEl) list.prepend(rowEl);
+                        if (list.firstChild !== rowEl && !isSelfChat) {
+                            list.insertBefore(rowEl, list.children[1] || null);
+                        }
                     } else {
                         unreadBadge.style.display = 'none';
-                        statusDiv.innerText = u.typing === myName ? 'typing...' : preview;
+                        statusDiv.innerText = (u && u.typing === myName && !isSelfChat) ? 'typing...' : preview;
                         statusDiv.style.fontWeight = "normal";
                         statusDiv.style.color = "var(--text-muted)";
 
-                        const list = document.getElementById('contact-list');
-                        if (list.firstChild !== rowEl) list.prepend(rowEl);
+                        if (list.firstChild !== rowEl && !isSelfChat) {
+                            list.insertBefore(rowEl, list.children[1] || null);
+                        }
                     }
                 }
             });
