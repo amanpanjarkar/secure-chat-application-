@@ -63,6 +63,7 @@
                     <div style="position: relative;">
                         <button class="three-dots icon-btn" onclick="toggleMenu()">⋮</button>
                         <div id="options-menu" class="dropdown-content" style="right: 0; left: auto; top: 100%;">
+                            <a href="javascript:void(0)" onclick="document.getElementById('settings-modal').style.display='flex'">Settings</a>
                             <a href="javascript:void(0)" onclick="changeMyUsername()">Change Username</a>
                             <a href="javascript:void(0)" onclick="logoutUser()">Logout</a>
                         </div>
@@ -119,8 +120,8 @@
                         </div>
                     </div>
                     <div class="header-actions" style="display: flex; align-items: center;">
-                        <button class="icon-btn">📞</button>
-                        <button class="icon-btn">📹</button>
+                        <button class="icon-btn" onclick="startCall('audio')">📞</button>
+                        <button class="icon-btn" onclick="startCall('video')">📹</button>
                         <button class="icon-btn">🔍</button>
                         <div style="position: relative;">
                             <button class="three-dots icon-btn" onclick="toggleChatMenu()">⋮</button>
@@ -151,12 +152,25 @@
                         style="position: absolute; right: 25px; top: 15px; background: none; border: none; font-size: 16px; color: var(--text-muted); cursor: pointer;">✕</button>
                 </div>
 
+                <div id="edit-preview-container"
+                    style="display: none; background: var(--bg-app); border-top: 1px solid var(--border-color); border-bottom: none; padding: 10px 15px; position: relative;">
+                    <div
+                        style="background: var(--bg-hover); border-left: 4px solid #34b7f1; padding: 8px 12px; border-radius: 4px; display: flex; flex-direction: column;">
+                        <span style="color: #34b7f1; font-size: 13px; font-weight: 500; margin-bottom: 4px;">Edit Message</span>
+                        <span id="edit-preview-text"
+                            style="color: var(--text-muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Original text...</span>
+                    </div>
+                    <button onclick="cancelEdit()"
+                        style="position: absolute; right: 25px; top: 15px; background: none; border: none; font-size: 16px; color: var(--text-muted); cursor: pointer;">✕</button>
+                </div>
+
                 <footer id="chat-footer" class="input-panel" style="position:relative;">
                     <div id="upload-progress-container" style="display:none; width: 100%; height: 4px; background: var(--bg-hover); position:absolute; top: -4px; left:0;">
                         <div id="upload-progress-bar" style="height:100%; width: 0%; background: var(--accent); transition: width 0.2s;"></div>
                     </div>
-                    <div style="position: relative;">
+                    <div style="position: relative; display: flex; align-items: center; gap: 5px;">
                         <button class="icon-btn" onclick="toggleEmojiMenu()" id="emoji-btn">😊</button>
+                        <button class="icon-btn" onclick="openCamera()" title="Open Camera">📷</button>
                         <div id="emoji-menu" class="dropdown-content"
                             style="bottom: 100%; top: auto; left: 0; padding: 10px; width: 220px; display: none; grid-template-columns: repeat(6, 1fr); gap: 5px; font-size: 20px; background: var(--bg-app); border: 1px solid var(--border-color);">
                             <span onclick="addEmoji('😀')" style="cursor: pointer; text-align: center;">😀</span>
@@ -240,6 +254,62 @@
         </div>
     </div>
 
+    <!-- Camera Modal -->
+    <div id="camera-modal" class="modal" style="display: none; background: rgba(0,0,0,0.9); z-index: 100002; flex-direction: column;">
+        <div style="position: absolute; top: 20px; left: 0; right: 0; display: flex; justify-content: center; gap: 20px; z-index: 10;">
+            <button class="icon-btn" onclick="closeCamera()" style="background: rgba(255,255,255,0.2); color: white; border-radius: 50%; width: 40px; height: 40px;">✕</button>
+            <button class="icon-btn" onclick="flipCamera()" style="background: rgba(255,255,255,0.2); color: white; border-radius: 50%; width: 40px; height: 40px;">🔄</button>
+        </div>
+        <video id="camera-preview" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+        <div style="position: absolute; bottom: 40px; left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 40px; z-index: 10;">
+            <button id="capture-btn" onclick="capturePhoto()" style="width: 70px; height: 70px; border-radius: 50%; border: 5px solid white; background: transparent; cursor: pointer;"></button>
+        </div>
+    </div>
+
+    <!-- Call Modal -->
+    <div id="call-modal" class="modal" style="display: none; background: #1c1c1e; z-index: 100003; flex-direction: column; align-items: center; justify-content: space-around; color: white; padding: 40px;">
+        <div style="text-align: center;">
+            <img id="call-avatar" src="" style="width: 120px; height: 120px; border-radius: 50%; border: 3px solid var(--accent); margin-bottom: 20px;">
+            <h2 id="call-name" style="margin: 0;">Username</h2>
+            <p id="call-status" style="opacity: 0.7;">Ringing...</p>
+        </div>
+        
+        <div id="call-video-container" style="display: none; width: 100%; height: 60%; background: #000; border-radius: 20px; overflow: hidden; position: relative;">
+            <video id="remote-video" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+            <video id="local-video" autoplay playsinline muted style="position: absolute; bottom: 10px; right: 10px; width: 30%; height: 30%; border-radius: 10px; object-fit: cover; border: 2px solid white;"></video>
+        </div>
+
+        <div style="display: flex; gap: 30px;">
+            <button onclick="toggleMute()" class="icon-btn" style="background: rgba(255,255,255,0.1); width: 60px; height: 60px; border-radius: 50%; font-size: 24px;">🎤</button>
+            <button onclick="flipCameraInCall()" id="flip-call-btn" class="icon-btn" style="display: none; background: rgba(255,255,255,0.1); width: 60px; height: 60px; border-radius: 50%; font-size: 24px;">🔄</button>
+            <button onclick="endCall()" style="background: #ff3b30; color: white; width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 24px; cursor: pointer;">📞</button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal" style="display: none; z-index: 100004;">
+        <div class="modal-content" style="background: var(--bg-app); padding: 25px; width: 350px; border-radius: 15px; cursor: default;">
+            <h3 style="margin-top: 0; color: var(--text-main);">Settings</h3>
+            
+            <div style="display: flex; flex-direction: column; gap: 20px; margin: 20px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--text-main);">Message Sounds</span>
+                    <input type="checkbox" id="setting-msg-sound" checked onchange="saveSettings()">
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--text-main);">Call Sounds</span>
+                    <input type="checkbox" id="setting-call-sound" checked onchange="saveSettings()">
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--text-main);">Request Sounds</span>
+                    <input type="checkbox" id="setting-req-sound" checked onchange="saveSettings()">
+                </div>
+            </div>
+            
+            <button onclick="document.getElementById('settings-modal').style.display='none'" style="width: 100%; background: var(--accent); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer;">Done</button>
+        </div>
+    </div>
+
     <!-- Toast Notifications Container -->
     <div id="toast-container" class="toast-container"></div>
 
@@ -301,12 +371,12 @@
 
     <script src="js/config.js"></script>
     <script src="js/globals.js"></script>
-    <script src="js/utils.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/main.js"></script>
-    <script src="js/status.js"></script>
-    <script src="js/chat.js"></script>
-    <script src="js/ui.js"></script>
+    <script src="js/utils.js?v=1.0.1"></script>
+    <script src="js/auth.js?v=1.0.1"></script>
+    <script src="js/main.js?v=1.0.1"></script>
+    <script src="js/status.js?v=1.0.1"></script>
+    <script src="js/chat.js?v=1.0.1"></script>
+    <script src="js/ui.js?v=1.0.1"></script>
 </body>
 
 </html>

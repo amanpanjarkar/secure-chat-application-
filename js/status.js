@@ -154,7 +154,8 @@ window.uploadStatus = async function() {
         if(label) label.innerText = "";
     } catch (e) {
         console.error("Status Upload Error:", e);
-        showToast("Failed: " + e.message, "error");
+        const path = `users/${myName}/statuses`;
+        showToast(`Failed (Path: ${path}): ` + e.message, "error");
     } finally {
         btn.innerText = "Post Status";
         btn.disabled = false;

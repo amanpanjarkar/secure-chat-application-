@@ -47,26 +47,44 @@ function listenForRequests() {
         snap.forEach(req => {
             count++;
             const sender = req.key;
+            
+            const cardId = `request-card-${sender}`;
             list.innerHTML += `
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border-color);">
-                    <span style="font-weight: 500; color: var(--text-main); font-size: 15px;">@${sender}</span>
+                <div id="${cardId}" style="background: var(--bg-hover); border-radius: 12px; padding: 15px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--border-color); text-align: left;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <img id="req-pic-${sender}" src="${defaultPic}" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover;">
+                        <div style="display: flex; flex-direction: column; overflow: hidden;">
+                            <span style="font-weight: bold; color: var(--text-main); font-size: 15px;">@${sender}</span>
+                            <span id="req-bio-${sender}" style="font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;">User profile...</span>
+                        </div>
+                    </div>
                     <div style="display: flex; gap: 8px;">
-                        <button onclick="acceptRequest('${sender}')" style="background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 500;">Accept</button>
-                        <button onclick="rejectRequest('${sender}')" style="background: transparent; color: #f15c6d; border: 1px solid #f15c6d; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 500;">Reject</button>
+                        <button onclick="acceptRequest('${sender}')" style="flex: 1; background: var(--accent); color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">Accept</button>
+                        <button onclick="rejectRequest('${sender}')" style="flex: 1; background: var(--bg-app); color: #f15c6d; border: 1px solid #f15c6d; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">Reject</button>
                     </div>
                 </div>
             `;
+
+            database.ref('users/' + sender).once('value', s => {
+                const u = s.val();
+                if (u) {
+                    const pic = document.getElementById(`req-pic-${sender}`);
+                    const bio = document.getElementById(`req-bio-${sender}`);
+                    if (pic && u.photo) pic.src = u.photo;
+                    if (bio) bio.innerText = u.bio || "No bio available";
+                }
+            });
         });
 
         if (!isInitialRequestLoad && count > previousRequestCount) {
-            playNotificationSound();
+            playTikSound(); // Play the requested tik sound
         }
         previousRequestCount = count;
         isInitialRequestLoad = false;
 
         if (count > 0) {
             badge.innerText = count;
-            badge.style.display = 'block';
+            badge.style.display = 'flex';
         } else {
             badge.style.display = 'none';
         }

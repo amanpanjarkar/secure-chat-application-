@@ -386,6 +386,12 @@ window.onload = () => {
     const savedName = localStorage.getItem('secureChatUsername');
     const savedEmail = localStorage.getItem('secureChatUserEmail');
 
+    // Load settings
+    const settings = JSON.parse(localStorage.getItem('secureChatSettings') || '{"msg":true,"call":true,"req":true}');
+    if (document.getElementById('setting-msg-sound')) document.getElementById('setting-msg-sound').checked = settings.msg;
+    if (document.getElementById('setting-call-sound')) document.getElementById('setting-call-sound').checked = settings.call;
+    if (document.getElementById('setting-req-sound')) document.getElementById('setting-req-sound').checked = settings.req;
+
     if (savedName && savedEmail) {
         myName = savedName;
         const authContainer = document.getElementById('auth-container');
@@ -399,3 +405,131 @@ window.onload = () => {
         }
     }
 };
+
+// Camera & Call UI Logic
+let currentStream = null;
+let currentFacingMode = 'user'; // 'user' or 'environment'
+
+window.openCamera = async function() {
+    document.getElementById('camera-modal').style.display = 'flex';
+    await startCameraStream();
+};
+
+async function startCameraStream() {
+    if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+    }
+    try {
+        currentStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: currentFacingMode },
+            audio: false
+        });
+        document.getElementById('camera-preview').srcObject = currentStream;
+    } catch (err) {
+        showToast("Camera access denied.", "error");
+        closeCamera();
+    }
+}
+
+window.flipCamera = async function() {
+    currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+    const preview = document.getElementById('camera-preview');
+    preview.style.transition = 'transform 0.5s ease-in-out';
+    preview.style.transform = 'rotateY(90deg)';
+    
+    setTimeout(async () => {
+        await startCameraStream();
+        preview.style.transform = 'rotateY(0deg)';
+    }, 250);
+};
+
+window.closeCamera = function() {
+    if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+        currentStream = null;
+    }
+    document.getElementById('camera-modal').style.display = 'none';
+};
+
+window.capturePhoto = function() {
+    const video = document.getElementById('camera-preview');
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    
+    canvas.toBlob(async (blob) => {
+        const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+        if (typeof sendFile === 'function') {
+            await sendFile(file);
+            closeCamera();
+        }
+    }, 'image/jpeg');
+};
+
+// Call Simulation Logic
+window.startCall = function(type) {
+    if (!activeRecipient) return;
+    const modal = document.getElementById('call-modal');
+    modal.style.display = 'flex';
+    document.getElementById('call-name').innerText = activeRecipient;
+    document.getElementById('call-avatar').src = document.getElementById('active-user-pic').src;
+    
+    const videoContainer = document.getElementById('call-video-container');
+    const flipBtn = document.getElementById('flip-call-btn');
+    
+    if (type === 'video') {
+        videoContainer.style.display = 'block';
+        flipBtn.style.display = 'block';
+        startCallStream();
+    } else {
+        videoContainer.style.display = 'none';
+        flipBtn.style.display = 'none';
+    }
+    
+    const settings = JSON.parse(localStorage.getItem('secureChatSettings') || '{"call":true}');
+    if (settings.call) playCallSound();
+};
+
+async function startCallStream() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        document.getElementById('local-video').srcObject = stream;
+        // In a real app, remote-video would come from WebRTC
+    } catch (err) {
+        showToast("Media access denied for call.", "error");
+    }
+}
+
+window.endCall = function() {
+    document.getElementById('call-modal').style.display = 'none';
+    // Stop all tracks
+    const localVid = document.getElementById('local-video');
+    if (localVid.srcObject) {
+        localVid.srcObject.getTracks().forEach(t => t.stop());
+    }
+};
+
+window.saveSettings = function() {
+    const settings = {
+        msg: document.getElementById('setting-msg-sound').checked,
+        call: document.getElementById('setting-call-sound').checked,
+        req: document.getElementById('setting-req-sound').checked
+    };
+    localStorage.setItem('secureChatSettings', JSON.stringify(settings));
+    showToast("Settings saved.");
+};
+
+function playCallSound() {
+    // Simple ringing sound simulation
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(440, ctx.currentTime);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    osc.start();
+    setTimeout(() => osc.stop(), 1000);
+}

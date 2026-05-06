@@ -89,6 +89,13 @@ function listenToTraffic() {
         if (ticks && data.status === 'seen') {
             ticks.classList.add('seen');
         }
+        
+        // Re-render bubble if edited or reacted
+        const oldEl = document.getElementById(`msg-${snap.key}`);
+        if (oldEl) {
+            const isMe = data.sender === myName;
+            updateMessageBubble(oldEl, data, snap.key, isMe);
+        }
     });
 
     currentChatRef.on('child_removed', snap => {
@@ -113,6 +120,28 @@ function renderMessageBubble(data, key) {
     msgDiv.className = `message ${isMe ? 'me' : ''}`;
     msgDiv.id = `msg-${key}`;
 
+    updateMessageBubble(msgDiv, data, key, isMe);
+
+    setupBubbleMenu(msgDiv, key, isMe, data);
+
+    // Double tap for heart reaction
+    let lastTap = 0;
+    msgDiv.addEventListener('touchstart', (e) => {
+        const now = Date.now();
+        if (now - lastTap < 300) {
+            reactToMessage(key, '❤️');
+        }
+        lastTap = now;
+    });
+    msgDiv.addEventListener('dblclick', () => {
+        reactToMessage(key, '❤️');
+    });
+
+    box.appendChild(msgDiv);
+    box.scrollTop = box.scrollHeight;
+}
+
+function updateMessageBubble(msgDiv, data, key, isMe) {
     let bodyHTML = "";
     if (data.type === 'image') {
         bodyHTML = `<img src="${data.text}" class="chat-img-small" loading="lazy" onclick="openFullImage('${data.text}')">`;
@@ -146,21 +175,32 @@ function renderMessageBubble(data, key) {
         `;
     }
 
+    // Reaction list
+    let reactionsHTML = "";
+    if (data.reactions) {
+        const counts = {};
+        Object.values(data.reactions).forEach(emoji => {
+            counts[emoji] = (counts[emoji] || 0) + 1;
+        });
+        reactionsHTML = `<div class="message-reactions">`;
+        for (let [emoji, count] of Object.entries(counts)) {
+            reactionsHTML += `<span class="reaction-badge" onclick="showReactionPicker('${key}')">${emoji} ${count > 1 ? count : ''}</span>`;
+        }
+        reactionsHTML += `</div>`;
+    }
+
     msgDiv.innerHTML = `
         <div class="bubble-inner">
             ${quotedHTML}
             <div class="content-frame">${bodyHTML}</div>
             <div class="meta-frame">
+                ${data.edited ? '<span class="edited-label">edited</span>' : ''}
                 <span class="meta-time">${data.time}</span>
                 ${isMe ? `<span class="tick ${data.status === 'seen' ? 'seen' : ''}" id="tick-${key}">✓✓</span>` : ''}
             </div>
+            ${reactionsHTML}
         </div>
     `;
-
-    setupBubbleMenu(msgDiv, key, isMe, data);
-
-    box.appendChild(msgDiv);
-    box.scrollTop = box.scrollHeight;
 }
 
 function setupBubbleMenu(element, key, isMe, data) {
@@ -188,6 +228,16 @@ function setupBubbleMenu(element, key, isMe, data) {
             menu.appendChild(btn1);
 
             if (isMe) {
+                // Edit option if within 15 mins
+                const msgTs = getTimestampFromPushId(key);
+                if (Date.now() - msgTs < 15 * 60 * 1000 && data.type === 'text') {
+                    const btnEdit = document.createElement('div');
+                    btnEdit.className = "delete-opt";
+                    btnEdit.innerText = "Edit";
+                    btnEdit.onclick = () => { initiateEdit(key, data); menu.remove(); };
+                    menu.appendChild(btnEdit);
+                }
+
                 const btn2 = document.createElement('div');
                 btn2.className = "delete-opt danger";
                 btn2.innerText = "Delete for everyone";
@@ -211,6 +261,11 @@ window.sendMessage = async function () {
     const inp = document.getElementById('message-input');
     const val = inp.value.trim();
     if (!val || !currentChatRef) return;
+
+    if (currentEditMessageId) {
+        window.updateMessage();
+        return;
+    }
 
     if (activeRecipient !== myName) {
         const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
@@ -313,4 +368,66 @@ window.updateTypingStatus = function () {
     typingTimeout = setTimeout(() => {
         database.ref('users/' + myName).update({ typing: "" });
     }, 1800);
+};
+
+// Editing Logic
+window.initiateEdit = function (key, data) {
+    currentEditMessageId = key;
+    const input = document.getElementById('message-input');
+    input.value = decodeMsg(data.text);
+    
+    document.getElementById('edit-preview-text').innerText = input.value;
+    document.getElementById('edit-preview-container').style.display = 'block';
+    
+    // Hide reply if open
+    if (typeof cancelReply === 'function') cancelReply();
+    input.focus();
+};
+
+window.cancelEdit = function () {
+    currentEditMessageId = null;
+    document.getElementById('edit-preview-container').style.display = 'none';
+    document.getElementById('message-input').value = "";
+};
+
+window.updateMessage = async function () {
+    const input = document.getElementById('message-input');
+    const newVal = input.value.trim();
+    if (!newVal || !currentEditMessageId || !currentChatRef) return;
+
+    await currentChatRef.child(currentEditMessageId).update({
+        text: encodeMsg(newVal),
+        edited: true
+    });
+
+    cancelEdit();
+};
+
+// Reaction Logic
+window.reactToMessage = function (key, emoji) {
+    if (!currentChatRef) return;
+    currentChatRef.child(key + '/reactions/' + myName).set(emoji);
+};
+
+window.showReactionPicker = function (key) {
+    const emojis = ['❤️', '😂', '🔥', '👏', '😢', '😮', '👍'];
+    const picker = document.createElement('div');
+    picker.className = 'reaction-picker-overlay';
+    
+    const container = document.createElement('div');
+    container.className = 'reaction-picker-container';
+    
+    emojis.forEach(emoji => {
+        const span = document.createElement('span');
+        span.innerText = emoji;
+        span.onclick = () => {
+            reactToMessage(key, emoji);
+            picker.remove();
+        };
+        container.appendChild(span);
+    });
+    
+    picker.onclick = (e) => { if (e.target === picker) picker.remove(); };
+    picker.appendChild(container);
+    document.body.appendChild(picker);
 };
