@@ -32,6 +32,7 @@ let currentReplyTo = null;
 let typingTimeout = null;
 let networkStatus = true;
 let lastRenderedDate = null;
+let chatClearedAtTimestamp = 0;
 const defaultPic = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
 
 
@@ -77,6 +78,27 @@ window.playNotificationSound = () => {
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.2);
     } catch (e) { console.warn("Audio Context blocked or unsupported"); }
+};
+
+window.playTipTipSound = () => {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const playBeep = (time) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1000, time);
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(0.05, time + 0.02);
+            gain.gain.linearRampToValueAtTime(0, time + 0.08);
+            osc.start(time);
+            osc.stop(time + 0.08);
+        };
+        playBeep(ctx.currentTime);
+        playBeep(ctx.currentTime + 0.12);
+    } catch (e) {}
 };
 
 window.showToast = function (msg, type = 'info') {
@@ -414,22 +436,29 @@ function renderSidebarRow(cid) {
         let isInitialMsgLoad = true;
         let previousUnread = 0;
         const roomPath = [myName, cid].sort().join("_");
-        database.ref('chats/' + roomPath).off('value'); // Prevent memory leak when re-rendering
-        database.ref('chats/' + roomPath).on('value', chatSnap => {
-            let unreadCount = 0;
-            let lastMsg = null;
+        
+        database.ref(`users/${myName}/clearedChats/${cid}`).on('value', clearSnap => {
+            const clearedAt = clearSnap.val() || 0;
+            
+            database.ref('chats/' + roomPath).off('value'); // Prevent memory leak when re-rendering
+            database.ref('chats/' + roomPath).on('value', chatSnap => {
+                let unreadCount = 0;
+                let lastMsg = null;
 
-            chatSnap.forEach(msgSnap => {
-                const msg = msgSnap.val();
-                lastMsg = msg;
-                if (msg.sender !== myName && msg.status !== 'seen') unreadCount++;
-            });
+                chatSnap.forEach(msgSnap => {
+                    const ts = getTimestampFromPushId(msgSnap.key);
+                    if (ts <= clearedAt) return;
 
-            if (!isInitialMsgLoad && unreadCount > previousUnread) {
-                playNotificationSound();
-            }
-            previousUnread = unreadCount;
-            isInitialMsgLoad = false;
+                    const msg = msgSnap.val();
+                    lastMsg = msg;
+                    if (msg.sender !== myName && msg.status !== 'seen') unreadCount++;
+                });
+
+                if (!isInitialMsgLoad && unreadCount > previousUnread) {
+                    playNotificationSound();
+                }
+                previousUnread = unreadCount;
+                isInitialMsgLoad = false;
 
             const unreadBadge = document.getElementById(`unread-${cid}`);
             const statusDiv = document.getElementById(`status-${cid}`);
@@ -460,7 +489,6 @@ function renderSidebarRow(cid) {
                     statusDiv.style.fontWeight = "normal";
                     statusDiv.style.color = "var(--text-muted)";
 
-                    const list = document.getElementById('contact-list');
                     if (list.firstChild !== rowEl) list.prepend(rowEl);
                 }
             }
@@ -500,6 +528,10 @@ window.startChat = function (target, photoUrl) {
 
     const roomPath = [myName, activeRecipient].sort().join("_");
 
+    database.ref(`users/${myName}/clearedChats/${target}`).on('value', s => {
+        chatClearedAtTimestamp = s.val() || 0;
+    });
+
     if (currentChatRef) currentChatRef.off();
     currentChatRef = database.ref('chats/' + roomPath);
 
@@ -527,12 +559,14 @@ window.startChat = function (target, photoUrl) {
 function listenToTraffic() {
 
     currentChatRef.on('child_added', snap => {
+        const ts = getTimestampFromPushId(snap.key);
+        if (ts <= chatClearedAtTimestamp) return;
+
         const d = snap.val();
         if (d.sender !== myName && d.status !== 'seen') {
             currentChatRef.child(snap.key).update({ status: 'seen' });
         }
 
-        const ts = getTimestampFromPushId(snap.key);
         const dateString = new Date(ts).toDateString();
 
         if (dateString !== lastRenderedDate) {
@@ -655,10 +689,16 @@ function setupBubbleMenu(element, key, isMe, data) {
 }
 
 
-window.sendMessage = function () {
+window.sendMessage = async function () {
     const inp = document.getElementById('message-input');
     const val = inp.value.trim();
     if (!val || !currentChatRef) return;
+
+    const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
+    if (!snap.exists() || snap.val() !== true) {
+        showToast("You cannot send a message. You are no longer friends.", "error");
+        return;
+    }
 
     const payload = {
         sender: myName,
@@ -672,6 +712,7 @@ window.sendMessage = function () {
     }
 
     currentChatRef.push().set(payload);
+    playTipTipSound();
 
     inp.value = "";
     if (typeof cancelReply === 'function') cancelReply();
@@ -683,7 +724,14 @@ window.sendMessage = function () {
 window.sendImageFile = async function () {
     const fInput = document.getElementById('image-input');
     const file = fInput.files[0];
-    if (!file) return;
+    if (!file || !currentChatRef) return;
+
+    const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
+    if (!snap.exists() || snap.val() !== true) {
+        showToast("You cannot send an image. You are no longer friends.", "error");
+        fInput.value = "";
+        return;
+    }
 
     const url = await uploadToCloudinary(file);
     if (url) {
@@ -694,6 +742,7 @@ window.sendImageFile = async function () {
             time: getTS(),
             status: 'sent'
         });
+        playTipTipSound();
     }
     fInput.value = "";
 };
@@ -912,6 +961,12 @@ window.toggleVoiceRecord = async function () {
                 voiceBtn.style.color = "";
                 voiceBtn.innerText = "🎤";
 
+                const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
+                if (!snap.exists() || snap.val() !== true) {
+                    showToast("You cannot send audio. You are no longer friends.", "error");
+                    return;
+                }
+
                 const file = new File([audioBlob], "voice_note.webm", { type: 'audio/webm' });
                 const url = await uploadToCloudinary(file, true);
 
@@ -927,6 +982,7 @@ window.toggleVoiceRecord = async function () {
                         payload.replyTo = currentReplyTo;
                     }
                     currentChatRef.push().set(payload);
+                    playTipTipSound();
                     if (typeof cancelReply === 'function') cancelReply();
                 }
             };
@@ -989,7 +1045,8 @@ window.toggleChatMenu = function () {
 window.clearCurrentChat = function () {
     if (!activeRecipient || !currentChatRef) return;
     showConfirm(`Are you sure you want to completely clear your chat history with @${activeRecipient}? This cannot be undone.`, () => {
-        currentChatRef.remove().then(() => {
+        const now = Date.now();
+        database.ref(`users/${myName}/clearedChats/${activeRecipient}`).set(now).then(() => {
             document.getElementById('chat-box').innerHTML = "";
             toggleChatMenu();
             showToast("System: Chat cleared successfully.");
@@ -1000,8 +1057,9 @@ window.clearCurrentChat = function () {
 window.unfriendCurrentContact = function () {
     if (!activeRecipient) return;
     showConfirm(`Are you sure you want to unfriend @${activeRecipient}? You will no longer see them in your contacts list.`, () => {
-        // Remove from my contacts list
-        database.ref(`users/${myName}/contacts/${activeRecipient}`).remove().then(() => {
+        // Remove from both contacts lists
+        database.ref(`users/${myName}/contacts/${activeRecipient}`).remove();
+        database.ref(`users/${activeRecipient}/contacts/${myName}`).remove().then(() => {
             resetViewport();
             toggleChatMenu();
             showToast(`System: You have unfriended @${activeRecipient}.`);
