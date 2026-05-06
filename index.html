@@ -78,6 +78,9 @@
                 </div>
             </div>
 
+            <div id="status-tray" class="status-tray" style="display: flex; gap: 15px; padding: 15px; overflow-x: auto; border-bottom: 1px solid var(--border-color); background: var(--bg-sidebar);">
+                <!-- Status avatars injected here -->
+            </div>
             <div id="contact-list" class="contacts-area"></div>
         </aside>
 
@@ -227,11 +230,68 @@
     <!-- Toast Notifications Container -->
     <div id="toast-container" class="toast-container"></div>
 
+    <!-- Status Upload Modal -->
+    <div id="status-upload-modal" class="modal" style="display: none; z-index: 10001;">
+        <div class="modal-content" style="background: var(--bg-app); padding: 20px; width: 350px; border-radius: 12px; cursor: default;">
+            <h3 style="color: var(--text-main); margin-top: 0;">Create Status</h3>
+            <textarea id="status-text-input" placeholder="Type a status..." style="width: 100%; height: 80px; margin-bottom: 10px; background: var(--bg-search); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; resize: none;"></textarea>
+            <div style="margin-bottom: 15px;">
+                <label for="status-file-input" style="cursor: pointer; color: var(--accent); font-weight: bold;">📎 Attach Photo/Video</label>
+                <input type="file" id="status-file-input" hidden accept="image/*,video/*" onchange="document.getElementById('status-file-label').innerText = this.files[0].name">
+                <span id="status-file-label" style="display: block; font-size: 12px; color: var(--text-muted); margin-top: 5px;"></span>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button onclick="document.getElementById('status-upload-modal').style.display='none'" style="background: transparent; color: var(--text-main); border: none; font-weight: bold; cursor: pointer;">Cancel</button>
+                <button id="status-post-btn" onclick="uploadStatus()" style="background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;">Post Status</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Viewer Modal -->
+    <div id="status-viewer-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 100000; flex-direction: column;">
+        <div style="position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 5px; z-index: 3;" id="status-progress-bars"></div>
+        <div style="position: absolute; top: 25px; left: 15px; display: flex; align-items: center; gap: 10px; z-index: 3;">
+            <img id="status-viewer-avatar" src="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+            <div style="color: white; font-weight: bold; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">
+                <span id="status-viewer-name"></span><br>
+                <span id="status-viewer-time" style="font-size: 12px; font-weight: normal; opacity: 0.8;"></span>
+            </div>
+        </div>
+        <button onclick="closeStatusViewer()" style="position: absolute; top: 25px; right: 20px; background: none; border: none; color: white; font-size: 24px; cursor: pointer; z-index: 3; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">✕</button>
+        
+        <div id="status-content-area" style="flex: 1; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
+            <div onclick="prevStatus()" style="position: absolute; left: 0; top: 0; bottom: 0; width: 30%; z-index: 2; cursor: pointer;"></div>
+            <div onclick="nextStatus()" style="position: absolute; right: 0; top: 0; bottom: 0; width: 70%; z-index: 2; cursor: pointer;"></div>
+        </div>
+
+        <div id="status-footer" style="padding: 20px; display: flex; justify-content: center; align-items: center; gap: 20px; z-index: 3;">
+            <div id="status-reactions" style="display: flex; gap: 20px; font-size: 28px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">
+                <span style="cursor: pointer; transition: transform 0.2s;" onclick="reactToStatus('😍')" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">😍</span>
+                <span style="cursor: pointer; transition: transform 0.2s;" onclick="reactToStatus('😂')" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">😂</span>
+                <span style="cursor: pointer; transition: transform 0.2s;" onclick="reactToStatus('🔥')" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">🔥</span>
+                <span style="cursor: pointer; transition: transform 0.2s;" onclick="reactToStatus('👏')" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">👏</span>
+            </div>
+            <div id="status-views-container" style="display: none; color: white; cursor: pointer; background: rgba(0,0,0,0.5); padding: 8px 16px; border-radius: 20px;" onclick="showStatusViews()">
+                👁️ <span id="status-view-count">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Views List Modal -->
+    <div id="status-views-modal" class="modal" style="display: none; z-index: 100001;">
+        <div class="modal-content" style="background: var(--bg-app); padding: 20px; width: 300px; border-radius: 12px; cursor: default; max-height: 400px; overflow-y: auto;">
+            <h3 style="color: var(--text-main); margin-top: 0; text-align: center;">Viewers</h3>
+            <div id="status-viewers-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;"></div>
+            <button onclick="document.getElementById('status-views-modal').style.display='none'" style="margin-top: 15px; width: 100%; background: var(--bg-hover); color: var(--text-main); border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer;">Close</button>
+        </div>
+    </div>
+
     <script src="js/config.js"></script>
     <script src="js/globals.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/main.js"></script>
+    <script src="js/status.js"></script>
     <script src="js/chat.js"></script>
     <script src="js/ui.js"></script>
 </body>

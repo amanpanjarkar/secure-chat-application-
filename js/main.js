@@ -18,6 +18,10 @@ function bootSystems() {
 
     listenForRequests();
     initializeSidebar();
+    
+    if (typeof loadStatuses === 'function') {
+        loadStatuses();
+    }
 }
 
 let isInitialRequestLoad = true;
