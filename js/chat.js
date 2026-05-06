@@ -33,9 +33,10 @@ window.startChat = function (target, photoUrl, isSelfChat = false) {
         chatClearedAtTimestamp = s.val() || 0;
     });
 
+    console.log("Updating currentChatRef:", { myName, activeRecipient, roomPath });
     if (currentChatRef) currentChatRef.off();
     currentChatRef = database.ref('chats/' + roomPath);
-
+    console.log("currentChatRef set to:", currentChatRef.toString());
 
     database.ref('users/' + target).on('value', snap => {
         const u = snap.val();
