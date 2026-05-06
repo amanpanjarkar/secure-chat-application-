@@ -117,33 +117,50 @@ const formatDateSeparator = (timestamp) => {
     return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-async function uploadToCloudinary(file, isAuto = false) {
+window.uploadToCloudinary = function(file, isAuto = false, onProgress = null) {
     if (!file) {
         console.warn("Media: No binary data provided.");
-        return null;
+        return Promise.resolve(null);
     }
 
     const formData = new FormData();
     formData.append("file", file);
     formData.append("upload_preset", CLOUDINARY_PRESET);
 
-    const uploadEndpoint = isAuto ? CLOUDINARY_URL.replace("/image/upload", "/video/upload") : CLOUDINARY_URL;
+    let resourceType = 'auto';
+    if (file.type.startsWith('image/')) resourceType = 'image';
+    else if (file.type.startsWith('video/') || isAuto) resourceType = 'video';
+    else resourceType = 'raw';
 
-    try {
-        console.log("Media: Initiating Cloudinary POST stream...");
-        const response = await fetch(uploadEndpoint, {
-            method: "POST",
-            body: formData
-        });
+    const uploadEndpoint = CLOUDINARY_URL.replace("/image/upload", `/${resourceType}/upload`);
 
-        if (!response.ok) throw new Error(`Media Error: ${response.status}`);
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", uploadEndpoint);
+        
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable && onProgress) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                onProgress(percent);
+            }
+        };
 
-        const data = await response.json();
-        console.log("Media: Success. HTTPS Endpoint:", data.secure_url);
-        return data.secure_url || null;
-    } catch (err) {
-        console.error("Media Engine Fault:", err);
-        window.alert("Media Engine: Upload failed. Check network stability.");
-        return null;
-    }
-}
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                const data = JSON.parse(xhr.responseText);
+                console.log("Media: Success. HTTPS Endpoint:", data.secure_url);
+                resolve(data.secure_url || null);
+            } else {
+                console.error("Media Error:", xhr.statusText);
+                reject(new Error(`Media Error: ${xhr.status}`));
+            }
+        };
+
+        xhr.onerror = () => {
+            console.error("Media Engine Fault");
+            reject(new Error("Network Error"));
+        };
+        
+        xhr.send(formData);
+    });
+};

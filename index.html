@@ -135,7 +135,10 @@
                         style="position: absolute; right: 25px; top: 15px; background: none; border: none; font-size: 16px; color: var(--text-muted); cursor: pointer;">✕</button>
                 </div>
 
-                <footer id="chat-footer" class="input-panel">
+                <footer id="chat-footer" class="input-panel" style="position:relative;">
+                    <div id="upload-progress-container" style="display:none; width: 100%; height: 4px; background: var(--bg-hover); position:absolute; top: -4px; left:0;">
+                        <div id="upload-progress-bar" style="height:100%; width: 0%; background: var(--accent); transition: width 0.2s;"></div>
+                    </div>
                     <div style="position: relative;">
                         <button class="icon-btn" onclick="toggleEmojiMenu()" id="emoji-btn">😊</button>
                         <div id="emoji-menu" class="dropdown-content"
@@ -154,8 +157,8 @@
                             <span onclick="addEmoji('🎉')" style="cursor: pointer; text-align: center;">🎉</span>
                         </div>
                     </div>
-                    <label for="image-input" class="icon-btn attach-btn" style="cursor: pointer;">📎</label>
-                    <input type="file" id="image-input" hidden accept="image/*" onchange="sendImageFile()">
+                    <label for="file-input" class="icon-btn attach-btn" style="cursor: pointer;">📎</label>
+                    <input type="file" id="file-input" hidden onchange="sendFile(this.files[0])">
                     <input type="text" id="message-input" placeholder="Type a message..." oninput="handleTyping()"
                         onkeydown="if(event.key==='Enter') sendMessage()">
                     <button class="icon-btn" id="voice-btn" onclick="toggleVoiceRecord()">🎤</button>

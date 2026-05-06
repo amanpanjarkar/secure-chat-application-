@@ -113,6 +113,20 @@ function renderMessageBubble(data, key) {
     let bodyHTML = "";
     if (data.type === 'image') {
         bodyHTML = `<img src="${data.text}" class="chat-img-small" loading="lazy" onclick="openFullImage('${data.text}')">`;
+    } else if (data.type === 'video') {
+        bodyHTML = `<video src="${data.text}" controls class="chat-img-small" style="max-width: 250px; border-radius: 8px;"></video>`;
+    } else if (data.type === 'file') {
+        const ext = data.fileName ? data.fileName.split('.').pop().toUpperCase() : 'FILE';
+        bodyHTML = `
+            <a href="${data.text}" target="_blank" download="${data.fileName}" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.1); padding: 10px; border-radius: 8px;">
+                <div style="font-size: 24px;">📄</div>
+                <div style="display: flex; flex-direction: column; overflow: hidden;">
+                    <span style="font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">${data.fileName || 'Attachment'}</span>
+                    <span style="font-size: 11px; opacity: 0.8;">${ext} Document</span>
+                </div>
+                <div style="margin-left: auto;">⬇️</div>
+            </a>
+        `;
     } else if (data.type === 'audio') {
         bodyHTML = `<audio controls style="width: 240px; height: 45px; margin-top: 5px;"><source src="${data.text}" type="audio/webm">Your browser does not support the audio element.</audio>`;
     } else {
@@ -221,30 +235,57 @@ window.sendMessage = async function () {
     database.ref('users/' + myName).update({ typing: "" });
 };
 
-window.sendImageFile = async function () {
-    const fInput = document.getElementById('image-input');
-    const file = fInput.files[0];
+window.sendFile = async function (fileParam = null) {
+    const fInput = document.getElementById('file-input');
+    const file = fileParam || (fInput ? fInput.files[0] : null);
     if (!file || !currentChatRef) return;
 
     const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
     if (!snap.exists() || snap.val() !== true) {
-        showToast("You cannot send an image. You are no longer friends.", "error");
-        fInput.value = "";
+        showToast("You cannot send files. You are no longer friends.", "error");
+        if (fInput) fInput.value = "";
         return;
     }
 
-    const url = await uploadToCloudinary(file);
-    if (url) {
-        currentChatRef.push().set({
-            sender: myName,
-            text: url,
-            type: 'image',
-            time: getTS(),
-            status: 'sent'
+    let type = 'file';
+    if (file.type.startsWith('image/')) type = 'image';
+    else if (file.type.startsWith('video/')) type = 'video';
+    
+    const progressContainer = document.getElementById('upload-progress-container');
+    const progressBar = document.getElementById('upload-progress-bar');
+    if (progressContainer) progressContainer.style.display = 'block';
+    if (progressBar) progressBar.style.width = '0%';
+
+    try {
+        const url = await uploadToCloudinary(file, false, (percent) => {
+            if (progressBar) progressBar.style.width = percent + '%';
         });
-        playTikSound();
+        
+        if (url) {
+            const payload = {
+                sender: myName,
+                text: url,
+                type: type,
+                fileName: file.name,
+                time: getTS(),
+                status: 'sent'
+            };
+            if (currentReplyTo) {
+                payload.replyTo = currentReplyTo;
+            }
+            currentChatRef.push().set(payload);
+            playTikSound();
+        }
+    } catch (e) {
+        showToast("Upload failed.", "error");
+    } finally {
+        setTimeout(() => { 
+            if (progressContainer) progressContainer.style.display = 'none'; 
+            if (progressBar) progressBar.style.width = '0%'; 
+        }, 500);
+        if (fInput) fInput.value = "";
+        if (typeof cancelReply === 'function') cancelReply();
     }
-    fInput.value = "";
 };
 
 window.updateProfilePhoto = async function () {

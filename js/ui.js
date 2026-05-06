@@ -349,6 +349,37 @@ function reportScreenshot() {
     currentChatRef.push().set(payload);
 }
 
+// Drag and Drop support
+window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (activeRecipient) {
+        const box = document.getElementById('chat-box');
+        if (box) box.style.opacity = '0.7';
+    }
+});
+
+window.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    if (activeRecipient) {
+        const box = document.getElementById('chat-box');
+        if (box) box.style.opacity = '1';
+    }
+});
+
+window.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (activeRecipient) {
+        const box = document.getElementById('chat-box');
+        if (box) box.style.opacity = '1';
+        
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            if (typeof sendFile === 'function') {
+                sendFile(e.dataTransfer.files[0]);
+            }
+        }
+    }
+});
+
 window.onload = () => {
     const savedName = localStorage.getItem('secureChatUsername');
     const savedEmail = localStorage.getItem('secureChatUserEmail');
