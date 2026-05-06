@@ -281,6 +281,8 @@ function proceedLogin(snapshot, finalEmail) {
 
 
 function bootSystems() {
+    const usernameDisplay = document.getElementById('my-username-display');
+    if (usernameDisplay) usernameDisplay.innerText = myName;
 
     database.ref('users/' + myName).update({ status: "Online", typing: "" });
     database.ref('users/' + myName).onDisconnect().update({ status: "Offline", lastSeen: firebase.database.ServerValue.TIMESTAMP, typing: "" });
@@ -774,6 +776,11 @@ window.confirmAddContact = function () {
 window.openFullImage = (url) => {
     document.getElementById("full-image").src = url;
     document.getElementById("image-modal").style.display = "flex";
+};
+
+window.toggleProfileMenu = () => {
+    const m = document.getElementById("profile-menu");
+    if (m) m.style.display = m.style.display === 'block' ? 'none' : 'block';
 };
 
 window.toggleMenu = () => {
