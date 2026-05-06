@@ -105,3 +105,51 @@ function proceedLogin(snapshot, finalEmail) {
         bootSystems();
     });
 }
+
+window.logoutUser = function () {
+    localStorage.removeItem('secureChatUsername');
+    localStorage.removeItem('secureChatUserEmail');
+    location.reload();
+};
+
+window.changeMyUsername = async function() {
+    const newUsername = prompt("Enter new username (no spaces):");
+    if (!newUsername) return;
+    
+    const cleanNew = newUsername.trim().toLowerCase().replace(/[\.\#\$\[\]\s]/g, "_");
+    if (!cleanNew || cleanNew === myName) return;
+
+    try {
+        const check = await database.ref('users/' + cleanNew).once('value');
+        if (check.exists()) {
+            alert("This username is already taken.");
+            return;
+        }
+
+        if (!confirm(`Are you sure? Your friends will need to re-add you as @${cleanNew}.`)) return;
+
+        showToast("Migrating account...", "info");
+        
+        // 1. Get old data
+        const oldDataSnap = await database.ref('users/' + myName).once('value');
+        const data = oldDataSnap.val();
+        
+        // 2. Update username in data
+        data.username = cleanNew;
+        
+        // 3. Write to new node
+        await database.ref('users/' + cleanNew).set(data);
+        
+        // 4. Delete old node
+        await database.ref('users/' + myName).remove();
+        
+        // 5. Update local storage
+        localStorage.setItem('secureChatUsername', cleanNew);
+        
+        alert("Username changed successfully! The app will now reload.");
+        location.reload();
+    } catch (e) {
+        console.error("Migration Error:", e);
+        alert("Failed to change username: " + e.message);
+    }
+};
