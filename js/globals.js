@@ -4,6 +4,7 @@ let myName = "";
 let myUid = "";
 let currentChatRef = null;
 let currentReplyTo = null;
+let currentEditMessageId = null;
 let typingTimeout = null;
 let networkStatus = true;
 let lastRenderedDate = null;
