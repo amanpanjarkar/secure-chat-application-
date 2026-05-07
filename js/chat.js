@@ -81,6 +81,7 @@ function listenToTraffic() {
             lastRenderedDate = dateString;
         }
 
+        console.log("New message added:", { key: snap.key, data: d });
         renderMessageBubble(d, snap.key);
     });
 
@@ -261,7 +262,10 @@ function setupBubbleMenu(element, key, isMe, data) {
 window.sendMessage = async function () {
     const inp = document.getElementById('message-input');
     const val = inp.value.trim();
-    if (!val || !currentChatRef) return;
+    if (!val || !currentChatRef) {
+        console.error("Message input is empty or currentChatRef is null.", { val, currentChatRef });
+        return;
+    }
 
     if (currentEditMessageId) {
         window.updateMessage();
@@ -269,9 +273,15 @@ window.sendMessage = async function () {
     }
 
     if (activeRecipient !== myName) {
-        const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
-        if (!snap.exists() || snap.val() !== true) {
-            showToast("You cannot send a message. You are no longer friends.", "error");
+        try {
+            const snap = await database.ref(`users/${myName}/contacts/${activeRecipient}`).once('value');
+            if (!snap.exists() || snap.val() !== true) {
+                showToast("You cannot send a message. You are no longer friends.", "error");
+                return;
+            }
+        } catch (error) {
+            console.error("Error checking friendship status:", error);
+            showToast("Failed to verify friendship status.", "error");
             return;
         }
     }
@@ -287,13 +297,19 @@ window.sendMessage = async function () {
         payload.replyTo = currentReplyTo;
     }
 
-    currentChatRef.push().set(payload);
-    playTikSound();
+    try {
+        await currentChatRef.push().set(payload);
+        console.log("Message sent successfully:", payload);
+        playTikSound();
 
-    inp.value = "";
-    if (typeof cancelReply === 'function') cancelReply();
-    if (typeof handleTyping === 'function') handleTyping();
-    database.ref('users/' + myName).update({ typing: "" });
+        inp.value = "";
+        if (typeof cancelReply === 'function') cancelReply();
+        if (typeof handleTyping === 'function') handleTyping();
+        database.ref('users/' + myName).update({ typing: "" });
+    } catch (error) {
+        console.error("Failed to send message:", error);
+        showToast("Failed to send message. Please try again.", "error");
+    }
 };
 
 window.sendFile = async function (fileParam = null) {
