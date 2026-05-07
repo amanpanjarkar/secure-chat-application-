@@ -10,9 +10,9 @@ window.registerUserFromPage = function () {
 
     const username = cleanName(handle);
 
-    // Check if username is taken
+    // Check if username is taken using the 'usernames' index node
     console.log("Auth: Checking if username is taken:", username);
-    database.ref('users').orderByChild('username').equalTo(username).once('value').then(snapshot => {
+    database.ref('usernames/' + username).once('value').then(snapshot => {
         if (snapshot.exists()) {
             console.warn("Auth: Username taken:", username);
             throw new Error(`Username @${username} is taken.`);
@@ -22,7 +22,7 @@ window.registerUserFromPage = function () {
     }).then(userCredential => {
         const uid = userCredential.user.uid;
         console.log("Auth: Account created. UID:", uid);
-        console.log("DB: Provisioning user data node...");
+        console.log("DB: Provisioning user and indexing username...");
         
         const userData = {
             uid: uid,
@@ -39,15 +39,20 @@ window.registerUserFromPage = function () {
             }
         };
 
-        // Also update Auth profile display name for clarity in Firebase Console
+        // Also update Auth profile display name
         userCredential.user.updateProfile({ displayName: username }).catch(e => console.warn("Auth: Could not update profile display name", e));
 
-        return database.ref('users/' + uid).set(userData).then(() => {
-            console.log("DB: User data node created successfully for", username);
+        // Atomic write to both nodes
+        const updates = {};
+        updates['users/' + uid] = userData;
+        updates['usernames/' + username] = uid;
+
+        return database.ref().update(updates).then(() => {
+            console.log("DB: Registration success for", username);
             return userData;
         }).catch(dbErr => {
             console.error("DB Error during registration:", dbErr);
-            throw new Error("Failed to save user profile to database: " + dbErr.message);
+            throw new Error("Failed to save user profile: " + dbErr.message);
         });
     }).then(() => {
         console.log("Auth: Registration complete. Redirecting...");
@@ -107,12 +112,16 @@ window.loginUser = async function () {
                 log("DB: Legacy profile found (@" + oldUsername + "). Migrating...");
                 
                 // Migrate to UID-based node
-                database.ref('users/' + uid).set({
+                const updates = {};
+                updates['users/' + uid] = {
                     ...oldData,
                     uid: uid,
                     username: oldUsername
-                });
-                database.ref('users/' + oldUsername).remove();
+                };
+                updates['usernames/' + oldUsername] = uid;
+                updates['users/' + oldUsername] = null; // Equivalent to remove()
+                
+                database.ref().update(updates);
                 
                 // Update Auth profile display name
                 userCredential.user.updateProfile({ displayName: oldUsername }).catch(e => console.warn("Auth: Could not update legacy profile name", e));
@@ -162,8 +171,8 @@ window.changeMyUsername = async function() {
     if (!cleanNew || cleanNew === myName) return;
 
     try {
-        // Check if new username is taken
-        const check = await database.ref('users').orderByChild('username').equalTo(cleanNew).once('value');
+        // Check if new username is taken using the 'usernames' index
+        const check = await database.ref('usernames/' + cleanNew).once('value');
         if (check.exists()) {
             alert("This username is already taken.");
             return;
@@ -173,10 +182,13 @@ window.changeMyUsername = async function() {
 
         showToast("Updating username...", "info");
 
-        // Just update the username field in the user's UID node
-        await database.ref('users/' + myUid).update({
-            username: cleanNew
-        });
+        const oldName = myName;
+        const updates = {};
+        updates['users/' + myUid + '/username'] = cleanNew;
+        updates['usernames/' + cleanNew] = myUid;
+        updates['usernames/' + oldName] = null; // Free up the old username
+
+        await database.ref().update(updates);
 
         // Update local storage and global variable
         localStorage.setItem('secureChatUsername', cleanNew);

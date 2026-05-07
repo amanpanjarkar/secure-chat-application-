@@ -32,12 +32,12 @@ window.confirmAddContact = function () {
     }
 
     errorEl.style.display = "none";
-
-    // Search for user by username
-    database.ref('users').orderByChild('username').equalTo(h).once('value', s => {
+    showToast("Searching for user...", "info");
+    
+    // Search for user by username using the 'usernames' index
+    database.ref('usernames/' + h).once('value', s => {
         if (s.exists()) {
-            let targetUid = "";
-            s.forEach(child => { targetUid = child.key; });
+            const targetUid = s.val();
 
             database.ref(`users/${targetUid}/requests/${myUid}`).set({
                 username: myName,
