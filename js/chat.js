@@ -299,6 +299,7 @@ function renderMessage(key, data, existingEl = null) {
             <img
                 src="${data.text}"
                 onclick="openFullImage('${data.text}')"
+                onerror="this.src='assets/icons/icon-192.png'; this.style.opacity='0.5';"
                 style="
                     max-width:250px;
                     border-radius:12px;

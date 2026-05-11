@@ -295,9 +295,14 @@ function (url) {
     ).style.display =
         "flex";
 
-    document.getElementById(
+    const img = document.getElementById(
         "full-image"
-    ).src = url;
+    );
+    img.src = url;
+    img.onerror = function() {
+        this.src = 'assets/icons/icon-192.png';
+        this.style.opacity = '0.5';
+    };
 };
 
 document

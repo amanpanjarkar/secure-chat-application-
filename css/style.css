@@ -513,7 +513,7 @@ input:-webkit-autofill:focus{
     gap:10px;
 
     background-image:
-        url("https://i.imgur.com/8QZ7Z8L.png");
+        url("../assets/wallpapers/chat-bg.png");
 
     background-size:cover;
 }
