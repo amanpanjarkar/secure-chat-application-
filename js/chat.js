@@ -373,14 +373,86 @@ function renderMessage(key, data, existingEl = null) {
         ticks = `<span class="tick ${isSeen ? 'seen' : ''}">${tickContent}</span>`;
     }
 
+
+    // Render reactions if present
+    let reactionsHtml = "";
+    if (data.reactions) {
+        reactionsHtml = `<div class="msg-reactions" style="margin-top:6px; display:flex; gap:4px;">` +
+            Object.entries(data.reactions).map(([uid, emoji]) => `<span class="msg-reaction" title="${uid === myUid ? 'You' : uid}">${emoji}</span>`).join("") +
+            `</div>`;
+    }
+
     div.innerHTML =
         `
         ${content}
+        ${reactionsHtml}
         <div class="message-time" style="display:flex; justify-content:flex-end; align-items:center; gap:4px; font-size:11px; margin-top:4px; opacity:0.6;">
             ${data.time}
             ${ticks}
         </div>
         `;
+
+    // Double-click for emoji reaction
+    div.ondblclick = (e) => {
+        if (data.type === 'deleted') return;
+        showEmojiPicker(div, key, data);
+    };
+// Simple emoji picker popup
+window.showEmojiPicker = function(targetDiv, msgKey, msgData) {
+    // Remove existing picker
+    const old = document.getElementById('emoji-picker-popup');
+    if (old) old.remove();
+
+    const picker = document.createElement('div');
+    picker.id = 'emoji-picker-popup';
+    picker.style.position = 'absolute';
+    picker.style.zIndex = 10001;
+    picker.style.background = '#202c33';
+    picker.style.border = '1px solid #222d34';
+    picker.style.borderRadius = '12px';
+    picker.style.padding = '8px';
+    picker.style.display = 'flex';
+    picker.style.gap = '8px';
+    picker.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)';
+
+    // Basic emoji set
+    const emojis = ['👍','😂','😍','😮','😢','🙏','🔥','🎉','😡','❤️'];
+    emojis.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.textContent = emoji;
+        btn.style.fontSize = '22px';
+        btn.style.background = 'none';
+        btn.style.border = 'none';
+        btn.style.cursor = 'pointer';
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            window.addReaction(msgKey, emoji);
+            picker.remove();
+        };
+        picker.appendChild(btn);
+    });
+
+    // Position picker near message
+    const rect = targetDiv.getBoundingClientRect();
+    picker.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+    picker.style.left = (rect.left + window.scrollX + 10) + 'px';
+
+    document.body.appendChild(picker);
+
+    // Remove picker on outside click
+    setTimeout(() => {
+        const removePicker = (ev) => {
+            if (!picker.contains(ev.target)) picker.remove();
+        };
+        document.addEventListener('mousedown', removePicker, { once: true });
+    }, 0);
+};
+
+// Add reaction to message in Firebase
+window.addReaction = function(msgKey, emoji) {
+    if (!currentChatRef || !myUid) return;
+    currentChatRef.child(msgKey + '/reactions/' + myUid).set(emoji);
+};
 
     div.oncontextmenu = (e) => {
         if (data.type === 'deleted') {
