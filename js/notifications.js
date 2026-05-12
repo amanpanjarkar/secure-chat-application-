@@ -1,31 +1,166 @@
 let notifiedMessages = {};
-
 let notifiedRequests = 0;
 
-/* INIT */
+const isNativeAndroid = () => {
+    return typeof Capacitor !== "undefined" && Capacitor.getPlatform && Capacitor.getPlatform() === "android";
+};
 
-window.initializeNotifications =
-async function () {
+const getCapacitorPlugin = name => {
+    if (typeof Capacitor === "undefined" || !Capacitor.Plugins) {
+        return null;
+    }
+    return Capacitor.Plugins[name] || null;
+};
 
-    if (
-        !("Notification" in window)
-    ) {
-
+window.createNotificationChannels = async function () {
+    if (!isNativeAndroid()) {
         return;
     }
 
-    if (
-        Notification.permission ===
-        "default"
-    ) {
+    const LocalNotifications = getCapacitorPlugin("LocalNotifications");
 
+    if (!LocalNotifications || !LocalNotifications.createChannel) {
+        return;
+    }
+
+    try {
+        await LocalNotifications.createChannel({
+            id: "messages",
+            name: "Messages",
+            description: "Secure Chat message notifications",
+            importance: 4,
+            sound: "default"
+        });
+
+        await LocalNotifications.createChannel({
+            id: "calls",
+            name: "Calls",
+            description: "Incoming call alerts",
+            importance: 5,
+            sound: "default"
+        });
+
+        await LocalNotifications.createChannel({
+            id: "missed_calls",
+            name: "Missed Calls",
+            description: "Missed call notifications",
+            importance: 3,
+            sound: "default"
+        });
+    } catch (e) {
+        console.warn("Unable to create notification channels", e);
+    }
+};
+
+window.requestAndroidPermissions = async function () {
+    if (!isNativeAndroid()) {
+        return;
+    }
+
+    const Permissions = getCapacitorPlugin("Permissions");
+    const PushNotifications = getCapacitorPlugin("PushNotifications");
+
+    if (Permissions && Permissions.request) {
+        const permissionNames = [
+            "camera",
+            "microphone",
+            "notifications",
+            "bluetooth",
+            "location"
+        ];
+
+        for (const name of permissionNames) {
+            try {
+                await Permissions.request({ name });
+            } catch (e) {
+                console.warn("Permission request failed:", name, e);
+            }
+        }
+    }
+
+    if (Notification.permission === "default") {
         try {
-
-            await Notification
-                .requestPermission();
-
+            await Notification.requestPermission();
         } catch (e) {
+            console.warn("Notification permission error", e);
+        }
+    }
 
+    try {
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    } catch (e) {
+        console.warn("WebRTC permission request failed", e);
+    }
+
+    if (PushNotifications && PushNotifications.requestPermissions) {
+        try {
+            const permission = await PushNotifications.requestPermissions();
+            if (permission.receive === "granted") {
+                await registerPushNotifications();
+            }
+        } catch (e) {
+            console.warn("Push notification permission error", e);
+        }
+    }
+};
+
+window.registerPushNotifications = async function () {
+    const PushNotifications = getCapacitorPlugin("PushNotifications");
+
+    if (!isNativeAndroid() || !PushNotifications) {
+        return;
+    }
+
+    try {
+        await PushNotifications.register();
+    } catch (e) {
+        console.warn("Push registration failed", e);
+        return;
+    }
+
+    PushNotifications.addListener("registration", token => {
+        console.log("Push registration token:", token.value);
+        if (myUid && database) {
+            database.ref(`users/${myUid}/fcmTokens/${token.value}`).set({
+                createdAt: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+    });
+
+    PushNotifications.addListener("registrationError", err => {
+        console.error("Push registration error:", err);
+    });
+
+    PushNotifications.addListener("pushNotificationReceived", notification => {
+        if (!appSettings.notifications) return;
+        showBrowserNotification(
+            notification.title || "Secure Chat",
+            notification.body || "Incoming notification"
+        );
+    });
+
+    PushNotifications.addListener("pushNotificationActionPerformed", event => {
+        console.log("Push notification action performed", event);
+    });
+};
+
+window.initializeNotifications =
+async function () {
+    if (isNativeAndroid()) {
+        await createNotificationChannels();
+        await requestAndroidPermissions();
+        await registerPushNotifications();
+        return;
+    }
+
+    if (!("Notification" in window)) {
+        return;
+    }
+
+    if (Notification.permission === "default") {
+        try {
+            await Notification.requestPermission();
+        } catch (e) {
             console.error(e);
         }
     }
@@ -225,14 +360,31 @@ function () {
 /* CALL */
 
 window.showIncomingCallNotification =
-function (
+async function (
     caller
 ) {
+    if (appSettings.notifications && isNativeAndroid()) {
+        const LocalNotifications = getCapacitorPlugin("LocalNotifications");
+        if (LocalNotifications && LocalNotifications.schedule) {
+            try {
+                await LocalNotifications.schedule({
+                    notifications: [
+                        {
+                            title: "Incoming Call",
+                            body: `${caller} is calling you`,
+                            id: Date.now() % 100000,
+                            channelId: "calls"
+                        }
+                    ]
+                });
+            } catch (e) {
+                console.warn("Local notification failed", e);
+            }
+        }
+    }
 
     showBrowserNotification(
-
         "Incoming Call",
-
         `${caller} is calling you`
     );
 

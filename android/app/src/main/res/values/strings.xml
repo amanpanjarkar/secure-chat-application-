@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Secure Chat</string>
+    <string name="title_activity_main">Secure Chat</string>
+    <string name="incoming_call_from">Incoming Call from %1$s</string>
+    <string name="answer_call">Answer</string>
+    <string name="reject_call">Decline</string>
+    <string name="incoming_call_message">Tap Answer to join the call or Decline to dismiss.</string>
+    <string name="package_name">com.aman.securechat</string>
+    <string name="custom_url_scheme">com.aman.securechat</string>
+</resources>

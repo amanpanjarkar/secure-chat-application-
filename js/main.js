@@ -1,10 +1,19 @@
 let systemsBooted = false;
-function bootSystems() {
+async function bootSystems() {
 
     if (systemsBooted)
         return;
 
     systemsBooted = true;
+
+    if (typeof requestAndroidPermissions === "function") {
+        requestAndroidPermissions().catch(err => console.warn("Permission request error:", err));
+    }
+
+    if (typeof createNotificationChannels === "function") {
+        createNotificationChannels().catch(err => console.warn("Channel creation error:", err));
+    }
+
     /* ONLINE */
 
     const userRef = database.ref("users/" + myUid);
